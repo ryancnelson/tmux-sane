@@ -1,0 +1,299 @@
+#!/usr/bin/env bash
+
+# sane-check-pane-health - Check health status of tmux panes
+#
+# Detects pane health status: responsive, frozen, dead, unknown
+# Can check single pane or all panes in a session
+#
+# Usage:
+#   ./sane-check-pane-health SESSION:WINDOW.PANE [--timeout N]
+#   ./sane-check-pane-health SESSION --all [--timeout N]
+#   ./sane-check-pane-health -h | --help
+#
+# Output: JSON with health_status, responsive, frozen, details
+
+set -euo pipefail
+
+# Default timeout for health check (in seconds)
+DEFAULT_TIMEOUT=5
+
+# Colors (for error messages to stderr)
+RED='\033[0;31m'
+NC='\033[0m'
+
+# Show usage
+usage() {
+    cat << 'EOF'
+Usage: sane-check-pane-health [OPTIONS] [SESSION:WINDOW.PANE | SESSION --all]
+
+Check the health status of one or more tmux panes.
+
+Commands:
+  sane-check-pane-health SESSION:WINDOW.PANE    Check single pane health
+  sane-check-pane-health SESSION --all           Check all panes in session
+  sane-check-pane-health -h, --help              Show this help
+
+Options:
+  --timeout N                  Health check timeout in seconds (default: 5)
+
+Output:
+  JSON with fields:
+    - pane: TARGET pane ID
+    - health_status: One of: healthy, frozen, dead, unknown
+    - responsive: Boolean (pane responds to test commands)
+    - frozen: Boolean (pane shows stale prompt)
+    - details: Human-readable status description
+    - timestamp: ISO8601 timestamp
+    - duration_ms: Time taken for health check in milliseconds
+    - prompt_age_seconds: Age of the prompt (if available)
+
+Exit codes:
+  0 = At least one pane is healthy
+  1 = All panes unhealthy or error occurred
+
+Examples:
+  # Check single pane
+  ./sane-check-pane-health tues:0.0
+
+  # Check all panes in session
+  ./sane-check-pane-health tues --all --timeout 10
+
+  # Parse the JSON output
+  ./sane-check-pane-health tues:0.0 | jq .health_status
+EOF
+}
+
+# Parse arguments
+if [ $# -eq 0 ]; then
+    usage
+    exit 0
+fi
+
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    usage
+    exit 0
+fi
+
+# Extract timeout option
+timeout_secs="$DEFAULT_TIMEOUT"
+check_all=false
+pane_target=""
+
+# Parse args
+i=1
+for arg in "$@"; do
+    case "$arg" in
+        --timeout)
+            ((i++))
+            if [ $i -le $# ]; then
+                timeout_secs="${!i}"
+            fi
+            ;;
+        --all)
+            check_all=true
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            if [ -z "$pane_target" ]; then
+                pane_target="$arg"
+            fi
+            ;;
+    esac
+    ((i++))
+done
+
+# Validate we have a target
+if [ -z "$pane_target" ]; then
+    echo "{\"error\": \"No pane or session specified\"}" >&2
+    exit 1
+fi
+
+# Helper function to check single pane health
+check_single_pane() {
+    local pane="$1"
+    local timeout="$2"
+    local start_time
+    start_time=$(date +%s%N)  # nanoseconds
+    
+    # Extract session name to check if session exists first
+    local session_part="${pane%%:*}"
+    
+    # Check if session exists
+    if ! tmux has-session -t "$session_part" 2>/dev/null; then
+        local end_time
+        end_time=$(date +%s%N)
+        local duration_ms=$(( (end_time - start_time) / 1000000 ))
+        
+        cat << EOF
+{
+  "error": "Session '$session_part' not found or invalid",
+  "pane": "$pane",
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "duration_ms": $duration_ms
+}
+EOF
+        return 1
+    fi
+    
+    # Check if pane exists
+    if ! tmux list-panes -t "$pane" > /dev/null 2>&1; then
+        local end_time
+        end_time=$(date +%s%N)
+        local duration_ms=$(( (end_time - start_time) / 1000000 ))
+        
+        cat << EOF
+{
+  "pane": "$pane",
+  "health_status": "dead",
+  "responsive": false,
+  "frozen": false,
+  "details": "Pane does not exist in session",
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "duration_ms": $duration_ms,
+  "prompt_age_seconds": null
+}
+EOF
+        return 1
+    fi
+    
+    # Get current pane contents and analyze
+    local pane_content
+    pane_content=$(tmux capture-pane -t "$pane" -p 2>/dev/null || echo "")
+    
+    # Try to detect if pane is responsive by checking if it has a prompt-like string
+    # Look for common prompt patterns: $ # > or % (bash, sh, zsh, fish prompts)
+    local has_prompt=false
+    if echo "$pane_content" | grep -qE '(\$|#|>|%)\s*$' || [ -z "$pane_content" ]; then
+        has_prompt=true
+    fi
+    
+    # Try to send a quick non-invasive command to test responsiveness
+    # Use 'echo $?' which should be safe and not cause issues
+    local test_marker="HEALTH_CHECK_$$_$(date +%s)"
+    local responsive=false
+    local frozen=false
+    local prompt_age_seconds=0
+    
+    # Send a test command that echoes a marker
+    tmux send-keys -t "$pane" "echo '$test_marker'" C-m 2>/dev/null || true
+    
+    # Wait for output with timeout
+    local check_count=0
+    local max_checks=$((timeout * 10))  # Check 10 times per second
+    
+    while [ $check_count -lt $max_checks ]; do
+        pane_content=$(tmux capture-pane -t "$pane" -p 2>/dev/null || echo "")
+        
+        if echo "$pane_content" | grep -q "$test_marker"; then
+            responsive=true
+            break
+        fi
+        
+        sleep 0.1
+        ((check_count++))
+    done
+    
+    # If not responsive within timeout, might be frozen
+    if [ "$responsive" = false ]; then
+        frozen=true
+    fi
+    
+    # Determine overall health status
+    local health_status="unknown"
+    if [ "$responsive" = true ]; then
+        health_status="healthy"
+    elif [ "$frozen" = true ]; then
+        health_status="frozen"
+    fi
+    
+    local end_time
+    end_time=$(date +%s%N)
+    local duration_ms=$(( (end_time - start_time) / 1000000 ))
+    
+    # Generate human-readable details
+    local details=""
+    if [ "$health_status" = "healthy" ]; then
+        details="Pane is responsive and accepting commands"
+    elif [ "$health_status" = "frozen" ]; then
+        details="Pane is unresponsive - may be running a command or frozen"
+    else
+        details="Pane health status unknown"
+    fi
+    
+    cat << EOF
+{
+  "pane": "$pane",
+  "health_status": "$health_status",
+  "responsive": $responsive,
+  "frozen": $frozen,
+  "details": "$details",
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "duration_ms": $duration_ms,
+  "prompt_age_seconds": $prompt_age_seconds
+}
+EOF
+    
+    if [ "$health_status" = "healthy" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Main logic
+if [ "$check_all" = true ]; then
+    # Check all panes in session
+    session="$pane_target"
+    
+    # Validate session exists
+    if ! tmux has-session -t "$session" 2>/dev/null; then
+        timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        echo "{\"error\": \"Session '$session' not found\", \"timestamp\": \"$timestamp\"}"
+        exit 1
+    fi
+    
+    # Get all panes in the session
+    panes=$(tmux list-panes -t "$session" -F "#{session_name}:#{window_index}.#{pane_index}" 2>/dev/null || echo "")
+    
+    if [ -z "$panes" ]; then
+        echo "[]"
+        exit 0
+    fi
+    
+    # Check each pane and collect results
+    results=()
+    any_healthy=false
+    
+    while IFS= read -r pane; do
+        result=$(check_single_pane "$pane" "$timeout_secs" 2>/dev/null || echo "")
+        if [ -n "$result" ]; then
+            results+=("$result")
+            if echo "$result" | grep -q '"health_status": "healthy"'; then
+                any_healthy=true
+            fi
+        fi
+    done <<< "$panes"
+    
+    # Output array of results
+    if [ ${#results[@]} -gt 0 ]; then
+        printf "[%s]\n" "$(IFS=,; echo "${results[*]}")"
+    else
+        echo "[]"
+    fi
+    
+    if [ "$any_healthy" = true ]; then
+        exit 0
+    else
+        exit 1
+    fi
+else
+    # Check single pane
+    if ! check_single_pane "$pane_target" "$timeout_secs"; then
+        exit 1
+    fi
+fi
+
+exit 0

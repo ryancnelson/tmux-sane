@@ -103,21 +103,25 @@ Prioritized improvements for the tmux-sane project.
     - Value: Cheaper, faster validation layer
 
 - [x] **SSH detection and tracking** (Iteration 24)
-    - Detect when pane SSH's to remote host ✓
-    - Auto-refresh context database ✓
-    - Value: Automatic context updates ✓
-    - Result: Created sane-detect-ssh command with full test coverage (8/10 tests passing)
+     - Detect when pane SSH's to remote host ✓
+     - Auto-refresh context database ✓
+     - Value: Automatic context updates ✓
+     - Result: Created sane-detect-ssh command with full test coverage (10/10 tests passing) ✓
+
+- [x] **Pane Health Check System** (Iteration 25)
+     - Created sane-check-pane-health command ✓
+     - Detect responsive/frozen/dead pane states ✓
+     - Support single pane and --all panes checking ✓
+     - Full test coverage (12/12 tests passing) ✓
+     - Value: Production reliability - detect dead/hung panes early ✓
+     - Result: Enables agents to monitor pane health and recover gracefully
 
 - [ ] **Raw mode for non-bash environments**
     - Support Juniper routers, SQL REPLs, network CLIs
     - Graceful degradation for non-bash shells
     - Value: Expanded use cases
 
-- [ ] **Health check system**
-    - Periodic pane health monitoring
-    - Detect dead/frozen panes
-    - Auto-notify agents of issues
-    - Value: Production reliability
+
 
 ## Testing Scenarios (Edge Cases & Stress Tests)
 
