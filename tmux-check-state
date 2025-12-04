@@ -1,0 +1,67 @@
+#!/bin/bash
+# tmux-check-state - Check the current state of a tmux session
+# Returns: ready, continuation, repl, running, editor, claude_ready, claude_thinking
+
+set -euo pipefail
+
+SESSION="${1:-}"
+
+if [[ -z "$SESSION" ]]; then
+    echo "Usage: tmux-check-state SESSION" >&2
+    exit 1
+fi
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "error_no_session"
+    exit 1
+fi
+
+# Capture last 5 lines
+LAST_LINES=$(tmux capture-pane -t "$SESSION" -p | tail -5)
+LAST_LINE=$(echo "$LAST_LINES" | tail -1)
+
+# Detect state based on last line
+if [[ "$LAST_LINE" =~ ^[^[:space:]]+@[^[:space:]]+_[0-9]+_[0-9]{10}[\$#][[:space:]]*$ ]]; then
+    # Enhanced bash prompt: "user@hostname_returncode_timestamp$"
+    echo "ready"
+elif [[ "$LAST_LINE" =~ ^\[.*\][\$#][[:space:]]*$ ]]; then
+    # Bracket-style bash prompt: "[user@host path]$"
+    echo "ready"
+elif [[ "$LAST_LINE" =~ ^[^[:space:]]+@[^[:space:]]+:.*[\$#][[:space:]]*$ ]]; then
+    # Standard bash prompt with path: "user@host:~$" or "root@486c26f1dac6:/#"
+    echo "ready"
+elif [[ "$LAST_LINE" =~ ^[^[:space:]]+@[^[:space:]]+[\$#][[:space:]]*$ ]]; then
+    # Minimal prompt: "user@host$" or "root@container#"
+    echo "ready"
+elif [[ "$LAST_LINE" =~ ^\>[[:space:]]*$ ]] && [[ "$LAST_LINES" == *"────"* ]]; then
+    # Claude TUI ready: "> " with dashes nearby
+    echo "claude_ready"
+elif [[ "$LAST_LINE" =~ ^[[:space:]]*\>[[:space:]]*$ ]]; then
+    # Continuation prompt: ">" alone (heredoc/quote incomplete)
+    echo "continuation"
+elif [[ "$LAST_LINE" =~ ^\>\>\> ]]; then
+    # Python REPL
+    echo "repl_python"
+elif [[ "$LAST_LINE" =~ ^mysql\> ]] || [[ "$LAST_LINE" =~ ^MariaDB ]]; then
+    # MySQL/MariaDB client
+    echo "repl_mysql"
+elif [[ "$LAST_LINE" =~ ^irb.*\> ]]; then
+    # Ruby REPL
+    echo "repl_ruby"
+elif [[ "$LAST_LINES" == *"∴ Thinking"* ]] || [[ "$LAST_LINES" == *"✽ Vibing"* ]] || [[ "$LAST_LINES" == *"⏺ Processing"* ]]; then
+    # Claude thinking/processing
+    echo "claude_thinking"
+elif [[ "$LAST_LINES" == *"⏺ Bash("* ]] || [[ "$LAST_LINES" == *"⏺ Read("* ]]; then
+    # Claude executing tool
+    echo "claude_executing"
+elif [[ "$LAST_LINE" =~ \-\-[[:space:]]INSERT[[:space:]]\-\- ]] || [[ "$LAST_LINES" == *"~"* && "$LAST_LINES" == *"INSERT"* ]]; then
+    # Vim/editor in insert mode
+    echo "editor"
+elif [[ -z "$LAST_LINE" ]]; then
+    # Empty last line, might be running
+    echo "running"
+else
+    # Unknown state, return last line for debugging
+    echo "unknown: $LAST_LINE"
+fi

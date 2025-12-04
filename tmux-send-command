@@ -1,0 +1,119 @@
+#!/bin/bash
+# tmux-send-command - Send command to tmux session with proper encoding and Enter handling
+# Handles timing quirks, base64 encoding for complex commands, Claude TUI pauses
+
+set -euo pipefail
+
+SESSION="${1:-}"
+COMMAND="${2:-}"
+IS_CLAUDE="${3:-auto}"  # auto, yes, no
+
+if [[ -z "$SESSION" ]] || [[ -z "$COMMAND" ]]; then
+    echo "Usage: tmux-send-command SESSION 'command' [is_claude]" >&2
+    exit 1
+fi
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    cat >&2 <<EOF
+Error: Session '$SESSION' does not exist
+
+⚠️  AI AGENTS: Do NOT try to fix this by using 'tmux' commands directly!
+    Instead: Report this error and propose a fix to the wrapper script.
+
+    Example: "tmux-send-command failed because session doesn't exist.
+             Should we add a tmux-create-session wrapper? Or use tmux-driver
+             which handles session creation?"
+EOF
+    exit 1
+fi
+
+# Auto-detect if this is Claude TUI
+if [[ "$IS_CLAUDE" == "auto" ]]; then
+    LAST_LINES=$(tmux capture-pane -t "$SESSION" -p | tail -5)
+    if [[ "$LAST_LINES" == *"────"* ]] && [[ "$LAST_LINES" == *">"* ]]; then
+        IS_CLAUDE="yes"
+    else
+        IS_CLAUDE="no"
+    fi
+fi
+
+# Determine if command needs base64 encoding
+# Only use base64 for truly complex cases where escaping is hard
+NEEDS_ENCODING=false
+
+# Multiline commands always need encoding
+if [[ "$COMMAND" == *$'\n'* ]]; then
+    NEEDS_ENCODING=true
+# Heredocs need encoding
+elif [[ "$COMMAND" == *'<<'* ]]; then
+    NEEDS_ENCODING=true
+# Mixed quotes (both ' and " in same command) need encoding
+elif [[ "$COMMAND" == *'"'* ]] && [[ "$COMMAND" == *"'"* ]]; then
+    NEEDS_ENCODING=true
+# Commands with both $ and quotes (variable expansion in strings)
+elif [[ "$COMMAND" == *'$'* ]] && [[ "$COMMAND" == *'"'* ]]; then
+    NEEDS_ENCODING=true
+fi
+
+# Simple cases that DON'T need base64:
+# - Single quotes alone: sudo find -name '*.gz'  ✓
+# - Pipes: ls | grep foo  ✓
+# - Dollar signs alone: echo $HOME  ✓
+# - Braces alone: for i in {1..10}  ✓
+
+if $NEEDS_ENCODING; then
+    # Encode complex command
+    ENCODED=$(echo "$COMMAND" | base64)
+    tmux send-keys -t "$SESSION" "echo $ENCODED | base64 -d | bash"
+    sleep 0.5
+    tmux send-keys -t "$SESSION" Enter
+else
+    # Simple command
+    tmux send-keys -t "$SESSION" "$COMMAND"
+
+    if [[ "$IS_CLAUDE" == "yes" ]]; then
+        # Claude TUI requires 1s pause before Enter
+        sleep 1
+    else
+        sleep 0.3
+    fi
+
+    tmux send-keys -t "$SESSION" Enter
+fi
+
+# Wait for submission
+sleep 2
+
+# Verify submission
+AFTER=$(tmux capture-pane -t "$SESSION" -p | tail -10)
+
+# Check for failed Enter pattern (text + newline + dashes)
+if echo "$AFTER" | grep -q "^> .*" && echo "$AFTER" | grep -q "^────"; then
+    # Failed Enter, try again
+    echo "Warning: Enter failed, retrying..." >&2
+    sleep 1
+    tmux send-keys -t "$SESSION" Enter
+    sleep 2
+
+    # Check again
+    AFTER=$(tmux capture-pane -t "$SESSION" -p | tail -10)
+    if echo "$AFTER" | grep -q "^> .*" && echo "$AFTER" | grep -q "^────"; then
+        cat >&2 <<'EOF'
+Error: Failed to send Enter after retry
+
+⚠️  AI AGENTS: Do NOT try to fix this with direct 'tmux send-keys' commands!
+
+    This script failed. Your options:
+    1. Report this failure and ask for help fixing the script
+    2. Use tmux-driver or tmux-agent-cheap with a subagent instead
+    3. Propose improvements to this wrapper script
+
+    DO NOT: Start using raw tmux/bash commands to "work around" this.
+    The wrapper exists for a reason. Fix the wrapper, don't bypass it.
+EOF
+        exit 1
+    fi
+fi
+
+echo "Command sent to $SESSION"

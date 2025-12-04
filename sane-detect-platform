@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# sane-detect-platform - Detect platform inside a tmux session
+# Usage: sane-detect-platform SESSION_NAME
+
+set -euo pipefail
+
+SESSION="${1:-}"
+
+if [[ -z "$SESSION" ]]; then
+    echo "Usage: sane-detect-platform SESSION_NAME" >&2
+    exit 1
+fi
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "Error: Session '$SESSION' does not exist" >&2
+    exit 1
+fi
+
+# Use unique markers to reliably extract command output
+MARKER="SANE_DETECT_$$_$(date +%s)"
+
+# Send all detection commands in one go with markers
+tmux send-keys -t "$SESSION" "echo '${MARKER}_START'" Enter
+sleep 0.3
+tmux send-keys -t "$SESSION" "uname -s" Enter
+sleep 0.3
+tmux send-keys -t "$SESSION" "uname -m" Enter
+sleep 0.3
+tmux send-keys -t "$SESSION" "hostname -s 2>/dev/null || hostname | cut -d. -f1" Enter
+sleep 0.3
+tmux send-keys -t "$SESSION" "whoami" Enter
+sleep 0.3
+tmux send-keys -t "$SESSION" "echo '${MARKER}_END'" Enter
+sleep 0.5
+
+# Capture output
+FULL_OUTPUT=$(tmux capture-pane -t "$SESSION" -p)
+
+# Extract lines between markers, skip command lines (those with $)
+OUTPUT=$(echo "$FULL_OUTPUT" | sed -n "/${MARKER}_START/,/${MARKER}_END/p" | grep -v "${MARKER}" | grep -v '\$')
+
+# Parse output (4 lines: OS, ARCH, HOSTNAME, USER)
+OS=$(echo "$OUTPUT" | sed -n '1p' | tr -d '\r\n' | xargs)
+ARCH=$(echo "$OUTPUT" | sed -n '2p' | tr -d '\r\n' | xargs)
+HOSTNAME=$(echo "$OUTPUT" | sed -n '3p' | tr -d '\r\n' | xargs)
+USER_NAME=$(echo "$OUTPUT" | sed -n '4p' | tr -d '\r\n' | xargs)
+
+# Build JSON
+JSON="{\"os\":\"$OS\",\"arch\":\"$ARCH\",\"hostname\":\"$HOSTNAME\",\"user\":\"$USER_NAME\"}"
+
+# Output JSON
+echo "$JSON"

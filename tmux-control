@@ -1,0 +1,121 @@
+#!/bin/bash
+# tmux-control - Execute tmux control operations on sessions
+# For operations like split-window, select-pane, resize-pane, etc.
+
+set -euo pipefail
+
+SESSION="${1:-}"
+OPERATION="${2:-}"
+shift 2 || true
+ARGS=("$@")
+
+if [[ -z "$SESSION" ]] || [[ -z "$OPERATION" ]]; then
+    cat >&2 <<EOF
+Usage: tmux-control SESSION OPERATION [args...]
+
+Operations:
+  split-h           Split pane horizontally (left/right)
+  split-v           Split pane vertically (top/bottom)
+  select-next       Select next pane
+  select-prev       Select previous pane
+  select-up         Select pane above
+  select-down       Select pane below
+  select-left       Select pane to left
+  select-right      Select pane to right
+  kill-pane         Kill current pane
+  resize-left N     Resize pane left by N cells
+  resize-right N    Resize pane right by N cells
+  resize-up N       Resize pane up by N cells
+  resize-down N     Resize pane down by N cells
+  list-panes        List all panes in session
+  swap-up           Swap with pane above
+  swap-down         Swap with pane below
+
+Examples:
+  # Split pane horizontally (left/right)
+  tmux-control deck split-h
+
+  # Split pane vertically (top/bottom)
+  tmux-control deck split-v
+
+  # Navigate to next pane
+  tmux-control deck select-next
+
+  # Kill current pane
+  tmux-control deck kill-pane
+
+  # Resize pane right by 10 cells
+  tmux-control deck resize-right 10
+EOF
+    exit 1
+fi
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    cat >&2 <<EOF
+Error: Session '$SESSION' does not exist
+
+Available sessions:
+$(tmux list-sessions 2>/dev/null || echo "  (none)")
+EOF
+    exit 1
+fi
+
+# Execute the operation
+case "$OPERATION" in
+    split-h)
+        tmux split-window -h -t "$SESSION"
+        ;;
+    split-v)
+        tmux split-window -v -t "$SESSION"
+        ;;
+    select-next)
+        tmux select-pane -t "$SESSION" -n
+        ;;
+    select-prev)
+        tmux select-pane -t "$SESSION" -p
+        ;;
+    select-up)
+        tmux select-pane -t "$SESSION" -U
+        ;;
+    select-down)
+        tmux select-pane -t "$SESSION" -D
+        ;;
+    select-left)
+        tmux select-pane -t "$SESSION" -L
+        ;;
+    select-right)
+        tmux select-pane -t "$SESSION" -R
+        ;;
+    kill-pane)
+        tmux kill-pane -t "$SESSION"
+        ;;
+    resize-left)
+        tmux resize-pane -t "$SESSION" -L "${ARGS[0]:-5}"
+        ;;
+    resize-right)
+        tmux resize-pane -t "$SESSION" -R "${ARGS[0]:-5}"
+        ;;
+    resize-up)
+        tmux resize-pane -t "$SESSION" -U "${ARGS[0]:-5}"
+        ;;
+    resize-down)
+        tmux resize-pane -t "$SESSION" -D "${ARGS[0]:-5}"
+        ;;
+    list-panes)
+        tmux list-panes -t "$SESSION"
+        ;;
+    swap-up)
+        tmux swap-pane -t "$SESSION" -U
+        ;;
+    swap-down)
+        tmux swap-pane -t "$SESSION" -D
+        ;;
+    *)
+        echo "Error: Unknown operation '$OPERATION'" >&2
+        echo "Run 'tmux-control' without arguments to see available operations" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

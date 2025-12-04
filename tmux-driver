@@ -1,0 +1,253 @@
+#!/usr/bin/env bash
+# Intelligent tmux session driver using cheap AWS Bedrock models
+# Usage: tmux-driver SESSION_NAME "task description"
+#
+# This script uses AI to drive a tmux session based on a task description.
+# It observes the session state, decides what to do, sends commands, and verifies results.
+
+set -euo pipefail
+
+SESSION="${1:-}"
+TASK="${2:-}"
+
+if [[ -z "$SESSION" ]] || [[ -z "$TASK" ]]; then
+    echo "Usage: tmux-driver SESSION_NAME \"task description\"" >&2
+    echo "" >&2
+    echo "Example:" >&2
+    echo "  tmux-driver tmuxxer \"list files in /tmp and show their sizes\"" >&2
+    exit 1
+fi
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    cat >&2 <<EOF
+Error: Session '$SESSION' does not exist
+
+Available sessions:
+$(tmux list-sessions 2>/dev/null || echo "  (none)")
+
+⚠️  AI AGENTS: Do NOT try to fix this by creating the session yourself!
+
+    This tool failed. Your options:
+    1. Report this error - maybe the session name is wrong
+    2. Ask if a session should be created first
+    3. Propose improvements to handle missing sessions
+
+    DO NOT: Use raw 'tmux new-session' or other tmux commands directly.
+    The wrapper tools exist for a reason.
+EOF
+    exit 1
+fi
+
+echo "🤖 tmux-driver: Driving session '$SESSION'"
+echo "📋 Task: $TASK"
+echo ""
+
+# Maximum iterations to prevent infinite loops
+MAX_ITERATIONS=20
+ITERATION=0
+
+# Main loop
+while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+    ITERATION=$((ITERATION + 1))
+    echo "--- Iteration $ITERATION/$MAX_ITERATIONS ---"
+
+    # 1. Check session state
+    echo "🔍 Checking session state..."
+    STATE=$("$SCRIPT_DIR/tmux-check-state" "$SESSION" 2>/dev/null || echo "unknown")
+    echo "   State: $STATE"
+
+    # 2. Capture current screen output
+    SCREEN_OUTPUT=$(tmux capture-pane -t "$SESSION" -p | tail -30)
+
+    # 3. Build AI prompt
+    PROMPT="You are an expert at driving terminal sessions. Your task is to accomplish the following goal:
+
+GOAL: $TASK
+
+CURRENT STATE:
+- Session state: $STATE
+- Screen output (last 30 lines):
+\`\`\`
+$SCREEN_OUTPUT
+\`\`\`
+
+ITERATION: $ITERATION of $MAX_ITERATIONS
+
+Your response must be valid JSON with this exact structure:
+{
+  \"status\": \"thinking\" | \"action\" | \"success\" | \"error\",
+  \"reasoning\": \"brief explanation of current situation and what you observe\",
+  \"command\": \"bash command to execute\" or null,
+  \"is_complete\": true | false
+}
+
+INSTRUCTIONS:
+- If the goal is accomplished, set status=\"success\" and is_complete=true
+- If you need to run a command, set status=\"action\" and provide the command
+- If you're waiting for output, set status=\"thinking\"
+- If you encounter an error, set status=\"error\" and explain
+
+State meanings:
+- \"ready\": Bash prompt, ready for commands
+- \"claude_ready\": Claude TUI ready
+- \"continuation\": Shell waiting for more input (incomplete command)
+- \"running\": Command executing
+- \"repl_*\": In an interactive REPL (python, mysql, etc)
+- \"editor\": In vim/editor
+- \"unknown\": Cannot determine state
+
+IMPORTANT:
+- For Claude TUI, commands must pause 1 second before Enter
+- Always check if the previous command completed before sending new ones
+- Look at the screen output to verify command results
+- Only respond with valid JSON, no other text"
+
+    # 4. Call cheap model for decision
+    TEMP_REQUEST=$(mktemp)
+    TEMP_RESPONSE=$(mktemp)
+    trap "rm -f $TEMP_REQUEST $TEMP_RESPONSE" EXIT
+
+    # Try Nova Micro first with 10 second timeout
+    jq -n \
+        --arg prompt "$PROMPT" \
+        '{
+            messages: [{
+                role: "user",
+                content: [{text: $prompt}]
+            }],
+            inferenceConfig: {
+                maxTokens: 500,
+                temperature: 0
+            }
+        }' > "$TEMP_REQUEST"
+
+    echo "   Trying Nova Micro (10s timeout)..."
+    if timeout 10 aws bedrock-runtime invoke-model \
+        --model-id amazon.nova-micro-v1:0 \
+        --body "file://$TEMP_REQUEST" \
+        --cli-binary-format raw-in-base64-out \
+        "$TEMP_RESPONSE" >/dev/null 2>&1; then
+
+        DECISION=$(jq -r '.output.message.content[0].text' "$TEMP_RESPONSE" 2>/dev/null)
+        MODEL_USED="nova-micro"
+    else
+        # Fallback to Haiku 3.5 with 15 second timeout
+        echo "   Nova Micro failed/timeout, trying Haiku 3.5 (15s timeout)..."
+        jq -n \
+            --arg prompt "$PROMPT" \
+            '{
+                anthropic_version: "bedrock-2023-05-31",
+                messages: [{
+                    role: "user",
+                    content: $prompt
+                }],
+                max_tokens: 500,
+                temperature: 0
+            }' > "$TEMP_REQUEST"
+
+        if timeout 15 aws bedrock-runtime invoke-model \
+            --model-id anthropic.claude-3-5-haiku-20241022 \
+            --body "file://$TEMP_REQUEST" \
+            --cli-binary-format raw-in-base64-out \
+            "$TEMP_RESPONSE" 2>/dev/null; then
+
+            DECISION=$(jq -r '.content[0].text' "$TEMP_RESPONSE" 2>/dev/null)
+            MODEL_USED="haiku-3.5"
+        else
+            cat >&2 <<'EOF'
+❌ Error: Both Nova Micro and Haiku failed to generate decision
+
+⚠️  AI AGENTS: Do NOT try to work around this!
+
+    This tool relies on AWS Bedrock models. If they're failing:
+    1. Report the error to the user
+    2. Check AWS credentials: aws sts get-caller-identity
+    3. Check Bedrock access: aws bedrock list-foundation-models
+    4. Propose fixes to this script
+
+    DO NOT: Try to accomplish the task manually with direct tmux commands.
+    Fix the tool, don't bypass it.
+EOF
+            exit 1
+        fi
+    fi
+
+    echo "🧠 Model: $MODEL_USED"
+
+    # Parse decision (extract JSON if there's extra text)
+    # Use perl for multiline regex since grep -o doesn't handle multiline
+    DECISION_JSON=$(echo "$DECISION" | perl -0777 -ne 'print $1 if /(\{.*?\})/s')
+
+    if [ -z "$DECISION_JSON" ]; then
+        echo "❌ Error: Could not extract JSON from model response" >&2
+        echo "Raw response: $DECISION" >&2
+        exit 1
+    fi
+
+    if ! echo "$DECISION_JSON" | jq empty 2>/dev/null; then
+        echo "❌ Error: Model returned invalid JSON" >&2
+        echo "Extracted: $DECISION_JSON" >&2
+        echo "Raw response: $DECISION" >&2
+        exit 1
+    fi
+
+    STATUS=$(echo "$DECISION_JSON" | jq -r '.status')
+    REASONING=$(echo "$DECISION_JSON" | jq -r '.reasoning')
+    COMMAND=$(echo "$DECISION_JSON" | jq -r '.command // empty')
+    IS_COMPLETE=$(echo "$DECISION_JSON" | jq -r '.is_complete')
+
+    echo "💭 Reasoning: $REASONING"
+
+    # 5. Act on decision
+    case "$STATUS" in
+        success)
+            echo "✅ Task completed successfully!"
+            echo ""
+            echo "Final output:"
+            tmux capture-pane -t "$SESSION" -p | tail -20
+            exit 0
+            ;;
+
+        error)
+            echo "❌ Error encountered: $REASONING"
+            exit 1
+            ;;
+
+        action)
+            if [[ -n "$COMMAND" ]]; then
+                echo "⚡ Executing: $COMMAND"
+                "$SCRIPT_DIR/tmux-send-command" "$SESSION" "$COMMAND"
+                sleep 2  # Wait for command to execute
+            else
+                echo "⚠️  Status is 'action' but no command provided"
+            fi
+            ;;
+
+        thinking)
+            echo "⏳ Waiting for output..."
+            sleep 2
+            ;;
+
+        *)
+            echo "⚠️  Unknown status: $STATUS"
+            sleep 1
+            ;;
+    esac
+
+    # Check if complete
+    if [[ "$IS_COMPLETE" == "true" ]]; then
+        echo "✅ Task marked complete"
+        exit 0
+    fi
+
+    echo ""
+done
+
+echo "⚠️  Max iterations ($MAX_ITERATIONS) reached without completion"
+echo "Final state:"
+tmux capture-pane -t "$SESSION" -p | tail -20
+exit 1

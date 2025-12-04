@@ -1,0 +1,15 @@
+# Context database (user-specific)
+.tmux-sane/
+
+# OS files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+friction-*.log
+
+# Test artifacts
+test-*.tmp

@@ -1,0 +1,53 @@
+#!/bin/bash
+# tmux-send-keys - Send key sequences (including control keys) to tmux session
+# Handles tmux control operations like split-window, select-pane, etc.
+
+set -euo pipefail
+
+SESSION="${1:-}"
+KEY_SEQUENCE="${2:-}"
+
+if [[ -z "$SESSION" ]] || [[ -z "$KEY_SEQUENCE" ]]; then
+    cat >&2 <<EOF
+Usage: tmux-send-keys SESSION 'key-sequence'
+
+Examples:
+  # Split pane horizontally (left/right)
+  tmux-send-keys deck 'C-b %'
+
+  # Split pane vertically (top/bottom)
+  tmux-send-keys deck 'C-b "'
+
+  # Navigate between panes
+  tmux-send-keys deck 'C-b o'
+
+  # Close current pane
+  tmux-send-keys deck 'C-b x'
+
+  # Send literal Enter key
+  tmux-send-keys deck 'Enter'
+
+  # Send Ctrl-C
+  tmux-send-keys deck 'C-c'
+
+Note: This sends actual key sequences to tmux, not shell commands.
+      For shell commands, use tmux-send-command instead.
+EOF
+    exit 1
+fi
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    cat >&2 <<EOF
+Error: Session '$SESSION' does not exist
+
+Available sessions:
+$(tmux list-sessions 2>/dev/null || echo "  (none)")
+EOF
+    exit 1
+fi
+
+# Send the key sequence to tmux
+tmux send-keys -t "$SESSION" "$KEY_SEQUENCE"
+
+exit 0

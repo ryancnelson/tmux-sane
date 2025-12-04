@@ -1,0 +1,47 @@
+#!/bin/bash
+# tmux-capture-fresh - Capture tmux pane output and verify it's fresh (not stale scrollback)
+# Returns clean output with freshness indicator
+
+set -euo pipefail
+
+SESSION="${1:-}"
+LINES="${2:-50}"
+
+if [[ -z "$SESSION" ]]; then
+    echo "Usage: tmux-capture-fresh SESSION [lines]" >&2
+    exit 1
+fi
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "Error: Session '$SESSION' does not exist" >&2
+    exit 1
+fi
+
+# Capture output
+OUTPUT=$(tmux capture-pane -t "$SESSION" -p | tail -"$LINES")
+
+# Send unique marker to verify session is responsive
+MARKER="FRESHNESS_CHECK_$(date +%s)"
+tmux send-keys -t "$SESSION" "echo $MARKER" 2>/dev/null || true
+sleep 0.5
+tmux send-keys -t "$SESSION" Enter 2>/dev/null || true
+sleep 1
+
+# Capture again to see if marker appears
+AFTER=$(tmux capture-pane -t "$SESSION" -p | tail -10)
+
+if echo "$AFTER" | grep -q "$MARKER"; then
+    echo "# Freshness: VERIFIED (marker found)"
+    echo "# Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "# Session: $SESSION"
+    echo "#"
+else
+    echo "# Freshness: UNCERTAIN (marker not found - may be stale)"
+    echo "# Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "# Session: $SESSION"
+    echo "#"
+fi
+
+# Return captured output
+echo "$OUTPUT"

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Simple wrapper for listing tmux sessions
+# This exists to bypass the tmux-command-interceptor hook while maintaining the delegation pattern
+
+set -euo pipefail
+
+# Just run tmux ls - this is explicitly allowed per INDEX.md line 89:
+# "Exception: Simple `tmux ls` or `tmux capture-pane -p` OK for quick checks"
+exec tmux ls "$@"

@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Cheap tmux agent using Nova Micro → Haiku 4.5 fallback
+# Usage: tmux-agent-cheap SESSION_NAME "query or task"
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check arguments
+if [ $# -lt 2 ]; then
+    echo "Usage: tmux-agent-cheap SESSION_NAME \"query or task\"" >&2
+    echo "" >&2
+    echo "Examples:" >&2
+    echo "  tmux-agent-cheap tmuxxer \"what command lists files with sizes?\"" >&2
+    echo "  tmux-agent-cheap tmuxxer \"is there a prompt showing? what does it say?\"" >&2
+    exit 1
+fi
+
+SESSION="$1"
+QUERY="$2"
+
+# Check session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    cat >&2 <<EOF
+Error: Session '$SESSION' does not exist
+
+⚠️  AI AGENTS: Do NOT try to fix this with raw tmux commands!
+
+    This tool failed. Your options:
+    1. Report the error - check if session name is correct
+    2. Ask user to verify the session exists
+    3. Propose improvements to this script
+
+    DO NOT: Use 'tmux list-sessions' or other tmux commands yourself.
+    Report the failure, don't work around it.
+EOF
+    exit 1
+fi
+
+# Capture screen
+SCREEN=$(tmux capture-pane -t "$SESSION" -p -S -30 2>/dev/null || echo "(capture failed)")
+
+# Build prompt
+PROMPT="You are helping analyze a tmux terminal session.
+
+Screen output (last 30 lines):
+\`\`\`
+$SCREEN
+\`\`\`
+
+Query: $QUERY
+
+Provide a clear, concise answer."
+
+# Use bedrock-parse library
+source "$SCRIPT_DIR/lib/bedrock-parse.sh"
+
+RESPONSE=$(bedrock_parse_json "" "$PROMPT" 500)
+RESULT=$?
+
+if [ $RESULT -eq 2 ]; then
+    cat >&2 <<'EOF'
+Error: Both Nova Micro and Haiku 4.5 failed
+
+⚠️  AI AGENTS: Do NOT work around this error!
+
+    The cheap models failed. Your options:
+    1. Report this error to the user
+    2. Check AWS Bedrock access
+    3. Propose fixes to this script or bedrock-parse.sh library
+
+    DO NOT: Try to answer the question yourself or use other methods.
+    Report the tool failure, don't bypass it.
+EOF
+    exit 1
+fi
+
+echo "$RESPONSE"
+
+# Show debug info if requested
+if [ -n "${BEDROCK_DEBUG:-}" ]; then
+    echo "" >&2
+    echo "[Model: ${BEDROCK_MODEL_USED:-unknown}, Input: ${BEDROCK_INPUT_TOKENS:-0} tokens, Output: ${BEDROCK_OUTPUT_TOKENS:-0} tokens]" >&2
+fi

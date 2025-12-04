@@ -1,0 +1,74 @@
+#!/bin/bash
+# tmux-wait-ready - Wait for tmux session to be ready for input
+# Returns 0 when ready, 1 on timeout
+
+set -euo pipefail
+
+SESSION="${1:-}"
+TIMEOUT="${2:-30}"
+
+if [[ -z "$SESSION" ]]; then
+    echo "Usage: tmux-wait-ready SESSION [timeout_seconds]" >&2
+    exit 1
+fi
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "Error: Session '$SESSION' does not exist" >&2
+    exit 1
+fi
+
+START_TIME=$(date +%s)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+while true; do
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$((CURRENT_TIME - START_TIME))
+
+    if [[ $ELAPSED -ge $TIMEOUT ]]; then
+        echo "Timeout waiting for session to be ready" >&2
+        exit 1
+    fi
+
+    # Check state using tmux-check-state
+    STATE=$("$SCRIPT_DIR/tmux-check-state" "$SESSION" 2>/dev/null || echo "unknown")
+
+    case "$STATE" in
+        ready|claude_ready)
+            echo "Session ready (state: $STATE)"
+            exit 0
+            ;;
+        running|claude_thinking|claude_executing)
+            # Still running, wait
+            sleep 2
+            ;;
+        continuation)
+            # Stuck in continuation, try to recover
+            echo "Warning: Session in continuation prompt, attempting recovery..." >&2
+            tmux send-keys -t "$SESSION" C-c
+            sleep 1
+            ;;
+        repl_*)
+            # In REPL, try to exit
+            echo "Warning: Session in REPL, attempting to exit..." >&2
+            tmux send-keys -t "$SESSION" "exit()"
+            sleep 0.5
+            tmux send-keys -t "$SESSION" Enter
+            sleep 1
+            ;;
+        editor)
+            # In editor, try to exit
+            echo "Warning: Session in editor, attempting to exit..." >&2
+            tmux send-keys -t "$SESSION" Escape
+            sleep 0.3
+            tmux send-keys -t "$SESSION" ":q"
+            sleep 0.3
+            tmux send-keys -t "$SESSION" Enter
+            sleep 1
+            ;;
+        *)
+            # Unknown state, wait
+            sleep 2
+            ;;
+    esac
+done

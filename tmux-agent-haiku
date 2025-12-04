@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Simple tmux agent using Haiku 3.5 via AWS Bedrock
+# This is a lightweight wrapper that calls Haiku for decision-making
+
+set -euo pipefail
+
+# Usage check
+if [ $# -lt 2 ]; then
+    echo "Usage: tmux-agent-haiku SESSION_NAME \"task or query\"" >&2
+    echo "" >&2
+    echo "Examples:" >&2
+    echo "  tmux-agent-haiku tmuxxer \"what command should I run to list files?\"" >&2
+    echo "  tmux-agent-haiku tmuxxer \"is the system ready for commands?\"" >&2
+    exit 1
+fi
+
+SESSION="$1"
+QUERY="$2"
+
+# Check session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "Error: Session '$SESSION' does not exist" >&2
+    exit 1
+fi
+
+# Capture session state
+SCREEN=$(tmux capture-pane -t "$SESSION" -p -S -30 2>/dev/null || echo "(could not capture)")
+
+# Build prompt
+PROMPT="You are helping drive a tmux terminal session.
+
+Current screen output (last 30 lines):
+\`\`\`
+$SCREEN
+\`\`\`
+
+User query: $QUERY
+
+Provide a brief, direct answer. If suggesting a command, format it on its own line starting with 'CMD:'"
+
+# Prepare request
+TEMP_REQUEST=$(mktemp)
+TEMP_RESPONSE=$(mktemp)
+trap "rm -f $TEMP_REQUEST $TEMP_RESPONSE" EXIT
+
+jq -n \
+    --arg prompt "$PROMPT" \
+    '{
+        anthropic_version: "bedrock-2023-05-31",
+        messages: [{
+            role: "user",
+            content: $prompt
+        }],
+        max_tokens: 500,
+        temperature: 0
+    }' > "$TEMP_REQUEST"
+
+# Call Haiku 4.5
+if ! aws bedrock-runtime invoke-model \
+    --model-id anthropic.claude-haiku-4-5-20251001-v1:0 \
+    --body "file://$TEMP_REQUEST" \
+    --cli-binary-format raw-in-base64-out \
+    "$TEMP_RESPONSE" 2>/dev/null; then
+    echo "Error: Failed to call Haiku 4.5 model" >&2
+    exit 1
+fi
+
+# Extract response
+RESPONSE=$(jq -r '.content[0].text' "$TEMP_RESPONSE" 2>/dev/null)
+
+if [ -z "$RESPONSE" ]; then
+    echo "Error: Empty response from model" >&2
+    exit 1
+fi
+
+# Output response
+echo "$RESPONSE"
+
+# Show usage stats if debug mode
+if [ -n "${BEDROCK_DEBUG:-}" ]; then
+    INPUT_TOKENS=$(jq '.usage.input_tokens // 0' "$TEMP_RESPONSE")
+    OUTPUT_TOKENS=$(jq '.usage.output_tokens // 0' "$TEMP_RESPONSE")
+    echo "" >&2
+    echo "[Model: haiku-4.5, Input: $INPUT_TOKENS tokens, Output: $OUTPUT_TOKENS tokens]" >&2
+fi
