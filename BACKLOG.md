@@ -50,10 +50,11 @@ Prioritized improvements for the tmux-sane project.
 
 ## Priority 2: Important but Need Breakdown
 
-- [ ] **Implement sane-run-command**
-  - Full implementation with timeout, validation, output capture
-  - Depends on: prompt setup, validation
-  - Break into sub-tasks
+- [x] **Implement sane-run-command** (Iteration 7)
+  - Full implementation with tmux capture-pane integration
+  - Works with remote SSH panes, local panes
+  - Returns JSON with output, exit_code, duration_ms
+  - All 16 tests passing
 
 - [ ] **Implement sane-create-file**  
   - With base64 encoding, backup mechanism
@@ -253,4 +254,13 @@ After running tests, update this section:
        - Returns JSON: {status, pane, shell, ps1_set, message}
        - Full test coverage (10/10 tests passing)
        - Enables reliable state detection and command sequence tracking
-    
+
+- [x] **Implement sane-run-command** (Iteration 7)
+       - Implemented using tmux capture-pane for reliable output capture
+       - Works correctly with remote SSH panes (not just local)
+       - Uses unique markers to detect command completion
+       - Extracts exit code from shell variable expansion
+       - Returns JSON: {output, exit_code, duration_ms}
+       - Full test coverage (16/16 tests passing)
+       - Supports SESSION, SESSION:WINDOW, SESSION:WINDOW.PANE formats
+       - Pre-flight bash syntax validation before execution
