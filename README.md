@@ -29,14 +29,16 @@ Current issues with AI-controlled tmux sessions:
 - Common syntax errors (jq, JSON, bash) waste tokens and create friction
 - Agents improvise at keystroke level leading to inconsistent behavior
 
-## 17 Available Commands
+## 20 Available Commands
 
 | Command | Purpose |
 |---------|---------|
 | `sane-detect-platform` | Detect OS, architecture, hostname, user |
 | `sane-detect-mode` | Detect bash vs raw mode in panes |
+| `sane-detect-ssh` | Detect SSH connections and remote hosts |
 | `sane-list-panes` | List all panes with metadata |
 | `sane-list-windows` | List all windows in a session with metadata |
+| `sane-check-pane-health` | Check pane responsiveness and health status |
 | `sane-run-command` | Execute commands with reliable output capture |
 | `sane-create-file` | Create files with automatic escaping |
 | `sane-setup-prompt` | Configure structured prompts |
@@ -45,6 +47,7 @@ Current issues with AI-controlled tmux sessions:
 | `sane-get-label` | Retrieve pane labels |
 | `sane-validate-bash` | Validate bash script syntax |
 | `sane-validate-json` | Validate JSON payloads |
+| `sane-validate-with-ai` | Validate code using AI models |
 | `sane-get-tool` | Resolve tool paths across platforms |
 | `sane-log-operation` | Log operations for analysis |
 | `sane-friction-analysis` | Analyze operational friction patterns |
