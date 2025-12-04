@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# sane-list-windows - List all windows in a tmux session with metadata
+# Usage: sane-list-windows SESSION
+# Example:
+#   sane-list-windows tues
+# Output: JSON format with windows array including window info and pane counts
+
+set -euo pipefail
+
+TARGET="${1:-}"
+
+if [[ -z "$TARGET" ]]; then
+    echo "Usage: sane-list-windows SESSION" >&2
+    exit 1
+fi
+
+# Extract session name from target (in case pane spec is included)
+SESSION=$(echo "$TARGET" | cut -d: -f1)
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "Error: Session '$SESSION' does not exist" >&2
+    exit 1
+fi
+
+# Get window list using tmux list-windows
+# Format: window_id|window_index|window_name|number_of_panes
+WINDOWS_OUTPUT=$(tmux list-windows -t "$SESSION" -F '#{window_id}|#{window_index}|#{window_name}|#{window_panes}')
+
+# Build JSON output
+echo "{"
+echo "  \"session\": \"$SESSION\","
+echo "  \"windows\": ["
+
+FIRST_WINDOW=true
+while IFS='|' read -r id index name pane_count; do
+    if [[ "$FIRST_WINDOW" == "false" ]]; then
+        echo ","
+    fi
+    FIRST_WINDOW=false
+    
+    # Escape special characters in JSON strings
+    name_json=$(echo "$name" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    
+    echo -n "    {"
+    echo -n "\"id\": \"$id\", "
+    echo -n "\"index\": $index, "
+    echo -n "\"name\": \"$name_json\", "
+    echo -n "\"pane_count\": $pane_count"
+    echo -n "}"
+done <<< "$WINDOWS_OUTPUT"
+
+echo ""
+echo "  ]"
+echo "}"

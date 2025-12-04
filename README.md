@@ -29,13 +29,14 @@ Current issues with AI-controlled tmux sessions:
 - Common syntax errors (jq, JSON, bash) waste tokens and create friction
 - Agents improvise at keystroke level leading to inconsistent behavior
 
-## 16 Available Commands
+## 17 Available Commands
 
 | Command | Purpose |
 |---------|---------|
 | `sane-detect-platform` | Detect OS, architecture, hostname, user |
 | `sane-detect-mode` | Detect bash vs raw mode in panes |
 | `sane-list-panes` | List all panes with metadata |
+| `sane-list-windows` | List all windows in a session with metadata |
 | `sane-run-command` | Execute commands with reliable output capture |
 | `sane-create-file` | Create files with automatic escaping |
 | `sane-setup-prompt` | Configure structured prompts |
@@ -104,6 +105,18 @@ $ ./sane-list-panes tues | jq .
   {"pane": "tues:0.0", "label": "local dev", "platform": "Darwin/arm64"},
   {"pane": "tues:0.1", "label": "prod db", "platform": "Linux/x86_64"}
 ]
+```
+
+### List all windows in a session
+```bash
+$ ./sane-list-windows tues | jq .
+{
+  "session": "tues",
+  "windows": [
+    {"id": "@0", "index": 0, "name": "editor", "pane_count": 2},
+    {"id": "@1", "index": 1, "name": "deploy", "pane_count": 3}
+  ]
+}
 ```
 
 ## Getting Started
