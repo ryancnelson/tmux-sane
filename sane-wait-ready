@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+
+# sane-wait-ready - Wait for a tmux pane to be ready to accept commands
+#
+# Polls a pane until it shows a bash prompt (ready state)
+# Useful after running commands or when verifying pane readiness
+#
+# Usage:
+#   ./sane-wait-ready SESSION:WINDOW.PANE [timeout_seconds]
+#   ./sane-wait-ready SESSION [timeout_seconds]
+#   ./sane-wait-ready -h | --help
+#
+# Output: JSON with ready status, duration, timestamp
+
+set -euo pipefail
+
+# Default timeout (seconds)
+DEFAULT_TIMEOUT=30
+
+# Poll interval (seconds)
+POLL_INTERVAL=0.2
+
+# Colors (for error messages to stderr)
+RED='\033[0;31m'
+NC='\033[0m'
+
+# Show usage
+usage() {
+    cat << 'EOF'
+Usage: sane-wait-ready [OPTIONS] [SESSION[:WINDOW.PANE]]
+
+Wait for a tmux pane to be ready to accept commands (showing bash prompt).
+
+Commands:
+  sane-wait-ready SESSION:WINDOW.PANE [timeout]    Wait for specific pane
+  sane-wait-ready SESSION [timeout]                 Wait for session's active pane
+  sane-wait-ready -h, --help                        Show this help
+
+Arguments:
+  timeout_seconds          Maximum time to wait (default: 30)
+
+Output:
+  JSON with fields:
+    - ready: Boolean (true if pane is ready)
+    - pane: Target pane ID
+    - duration_ms: Time taken in milliseconds
+    - timestamp: ISO8601 timestamp
+    - reason: Explanation if not ready (e.g., "timeout")
+
+Exit codes:
+  0 = Pane is ready
+  1 = Pane not ready or error occurred
+
+Examples:
+  # Wait for pane to be ready (default 30s timeout)
+  ./sane-wait-ready tues:0.0
+
+  # Wait with custom timeout
+  ./sane-wait-ready tues:0.0 10
+
+  # Wait for session's active pane
+  ./sane-wait-ready tues
+
+  # Parse the JSON output
+  ./sane-wait-ready tues:0.0 | jq .ready
+EOF
+}
+
+# Parse arguments
+if [ $# -eq 0 ]; then
+    usage
+    exit 0
+fi
+
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    usage
+    exit 0
+fi
+
+TARGET="${1:-}"
+TIMEOUT="${2:-$DEFAULT_TIMEOUT}"
+
+# Validate timeout is a number
+if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}Error: timeout must be a number, got '$TIMEOUT'${NC}" >&2
+    exit 1
+fi
+
+# If target doesn't contain ":", assume it's a session name
+# and get the active pane
+if [[ ! "$TARGET" =~ : ]]; then
+    # Get the active pane for the session
+    ACTIVE_PANE=$(tmux list-panes -t "$TARGET" -F "#{session_name}:#{window_index}.#{pane_index}" 2>/dev/null | head -1 || true)
+    
+    if [ -z "$ACTIVE_PANE" ]; then
+        echo -e "${RED}Error: Session '$TARGET' not found or has no panes${NC}" >&2
+        exit 1
+    fi
+    
+    TARGET="$ACTIVE_PANE"
+fi
+
+# Verify pane exists
+if ! tmux list-panes -t "$TARGET" -F "#{pane_id}" >/dev/null 2>&1; then
+    echo -e "${RED}Error: Pane '$TARGET' not found${NC}" >&2
+    exit 1
+fi
+
+# Track start time
+start_time=$(date +%s%N)
+start_time_ms=$((start_time / 1000000))
+
+# Check if pane is ready (has prompt visible)
+is_ready() {
+    local pane="$1"
+    
+    # Capture visible content (not scrollback) - just what's on screen
+    local pane_output=$(tmux capture-pane -t "$pane" -p 2>/dev/null || echo "")
+    
+    # Get the last line
+    local last_line=$(echo "$pane_output" | tail -1)
+    
+    # Check if the last line looks like a prompt (cursor is AT the prompt)
+    # Prompt patterns:
+    # - Contains "bash $" or "bash #" at the END (structured prompt from sane-setup-prompt)
+    # - Ends with $ or # possibly followed by space (standard prompt)
+    # Important: Must be at END of line to avoid matching "prompt$ command"
+    if echo "$last_line" | grep -qE '(bash [\$#]$|[\$#]$)'; then
+        return 0
+    fi
+    
+    # If last line is empty, check if we're at a prompt on the previous line
+    # (cursor on line after prompt, waiting for input)
+    # BUT: if command is running, we see: prompt+command, then empty line, then cursor
+    # So we need to distinguish:
+    #   Ready: "prompt$\n<cursor>" - second-to-last has prompt, last is empty
+    #   Busy:  "prompt$ command\n<empty>\n<cursor>" - second-to-last is empty too
+    
+    if [ -z "$last_line" ]; then
+        local second_last=$(echo "$pane_output" | tail -2 | head -1)
+        
+        # If second-to-last is also empty, we're NOT at a ready prompt
+        if [ -z "$second_last" ]; then
+            return 1
+        fi
+        
+        # Second-to-last is not empty - check if it's a prompt (not a command)
+        # If it contains a prompt char AND doesn't have text after it (command), it's ready
+        # Simple heuristic: if the line ends with $ or # and no other text follows, it's a prompt
+        if echo "$second_last" | grep -qE '(\$|#)$'; then
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+# Poll for readiness
+elapsed=0
+ready=false
+
+while [ "$elapsed" -lt "$TIMEOUT" ]; do
+    if is_ready "$TARGET"; then
+        ready=true
+        break
+    fi
+    
+    # Sleep for poll interval
+    sleep "$POLL_INTERVAL"
+    
+    # Update elapsed time
+    elapsed=$((elapsed + 1))
+    
+    # More precise elapsed calculation
+    current_time=$(date +%s%N)
+    current_time_ms=$((current_time / 1000000))
+    elapsed_ms=$((current_time_ms - start_time_ms))
+    elapsed=$((elapsed_ms / 1000))
+done
+
+# Calculate final duration
+end_time=$(date +%s%N)
+end_time_ms=$((end_time / 1000000))
+duration_ms=$((end_time_ms - start_time_ms))
+
+# Generate timestamp
+timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+
+# Build JSON response
+if [ "$ready" = true ]; then
+    cat <<EOF
+{
+  "ready": true,
+  "pane": "$TARGET",
+  "duration_ms": $duration_ms,
+  "timestamp": "$timestamp"
+}
+EOF
+    exit 0
+else
+    cat <<EOF
+{
+  "ready": false,
+  "pane": "$TARGET",
+  "duration_ms": $duration_ms,
+  "timestamp": "$timestamp",
+  "reason": "timeout"
+}
+EOF
+    exit 1
+fi

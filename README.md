@@ -29,7 +29,7 @@ Current issues with AI-controlled tmux sessions:
 - Common syntax errors (jq, JSON, bash) waste tokens and create friction
 - Agents improvise at keystroke level leading to inconsistent behavior
 
-## 20 Available Commands
+## 21 Available Commands
 
 | Command | Purpose |
 |---------|---------|
@@ -53,6 +53,7 @@ Current issues with AI-controlled tmux sessions:
 | `sane-friction-analysis` | Analyze operational friction patterns |
 | `sane-transfer-to-workstation` | Transfer files via wormhole |
 | `sane-transfer-from-workstation` | Transfer files via wormhole |
+| `sane-wait-ready` | Wait for pane to be ready to accept commands |
 
 ## Quick Examples
 
@@ -163,7 +164,7 @@ $ ./sane-list-windows tues | jq .
 
 ## Test Coverage
 
-- **24 test suites** covering 300+ scenarios
+- **30 test suites** covering 379+ scenarios
 - **Edge cases**: SSH, REPLs, nested tmux, network devices
 - **Workflows**: Multi-file, multi-server, agent patterns
 - **Performance**: Command execution, file creation benchmarks
@@ -182,9 +183,9 @@ All tests pass with consistent, reproducible results.
 
 ✅ **v0.1 - Production Ready** - All features complete, tested, and documented.
 
-- 15 production-grade commands
-- 22 development iterations
-- 364 passing tests
+- 21 production-grade commands
+- 28 development iterations
+- 379+ passing tests (15 new tests in iteration 28)
 - Comprehensive documentation
 - Ready for integration
 

@@ -235,8 +235,6 @@ After running tests, update this section:
 - Session health monitoring
 - Auto-cleanup of dead pane contexts
 - Send keystroke primitive (sane-send-keys for raw keystroke input)
-- Wait for ready state primitive (sane-wait-ready for polling readiness)
-
 ## Completed
 
 - [x] **Initial project setup** (Iteration 0)
@@ -448,7 +446,7 @@ After running tests, update this section:
                 - All 20 ask-helpers tests now passing
                 - Commit: fix: Use local validation only for bash syntax checking
 
-        - [x] **Window Management: sane-list-windows** (Iteration 28)
+         - [x] **Window Management: sane-list-windows** (Iteration 28)
                 - Implemented sane-list-windows command for listing all windows in a session
                 - Returns JSON with window ID, index, name, and pane count
                 - Enables agents to get visibility into session structure
@@ -456,3 +454,15 @@ After running tests, update this section:
                 - Full test coverage (tests/test-list-windows.sh with 8/8 tests passing)
                 - Updated README.md: command count 16→17
                 - Commit: feat: Implement sane-list-windows command for window management
+
+         - [x] **Wait for Ready State: sane-wait-ready** (Iteration 28)
+                - Implemented sane-wait-ready command for polling pane readiness
+                - Waits for pane to show bash prompt (ready to accept commands)
+                - Configurable timeout with default of 30 seconds
+                - Returns JSON with ready status, duration, timestamp, and reason
+                - Detects both standard and structured prompts
+                - Handles busy panes correctly (waits for command completion)
+                - Full test coverage (tests/test-sane-wait-ready.sh with 15/15 tests passing)
+                - Updated README.md: command count 17→18
+                - Enables agents to synchronize on pane state before sending commands
+                - Commit: feat: Implement sane-wait-ready for pane readiness polling
