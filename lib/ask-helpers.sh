@@ -107,19 +107,19 @@ ask_haiku_yn() {
     fi
 }
 
-# Validate bash syntax using AI (with local fallback)
-# This is a fallback to sane-validate-bash - only use if local validation fails
+# Validate bash syntax using local tools
+# Note: We don't use AI for bash validation since bash -n is always correct
 # Usage: validate_bash_with_ai "echo hello"
-# Returns: JSON {valid: true/false, method: "local"|"ai", error: "..."}
+# Returns: JSON {valid: true/false, method: "local", error: "..."}
 validate_bash_with_ai() {
     local bash_code="${1:-}"
     
     if [[ -z "$bash_code" ]]; then
-        echo '{"valid":false,"method":"none","error":"No bash code provided"}'
+        echo '{"valid":false,"method":"local","error":"No bash code provided"}'
         return 0
     fi
     
-    # First, try local validation (fastest, cheapest)
+    # Use local validation via bash -n (always correct, no need for AI)
     local tmpfile
     tmpfile=$(mktemp)
     trap "rm -f '$tmpfile'" RETURN
@@ -127,28 +127,14 @@ validate_bash_with_ai() {
     echo "$bash_code" > "$tmpfile"
     
     if bash -n "$tmpfile" 2>/dev/null; then
-        # Local validation passed
+        # Validation passed
         echo '{"valid":true,"method":"local"}'
         return 0
-    fi
-    
-    # Local validation failed - try ask-nova-lite as fallback
-    if ! command -v ask-nova-lite &>/dev/null; then
-        echo '{"valid":false,"method":"none","error":"Bash syntax invalid (ask-nova-lite not available)"}'
+    else
+        # Validation failed
+        echo '{"valid":false,"method":"local","error":"Bash syntax invalid"}'
         return 0
     fi
-    
-    # Ask Nova Lite if the bash is valid
-    local escaped_code
-    escaped_code=$(printf '%s' "$bash_code" | sed 's/"/\\"/g')
-    
-    if ask_nova_lite_yn "Is this valid bash syntax: $escaped_code" 2>/dev/null; then
-        echo '{"valid":true,"method":"ai"}'
-    else
-        echo '{"valid":false,"method":"ai","error":"Bash syntax invalid (verified with ask-nova-lite)"}'
-    fi
-    
-    return 0
 }
 
 # Validate jq syntax using AI (with local fallback)
