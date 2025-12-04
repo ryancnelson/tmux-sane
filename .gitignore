@@ -13,3 +13,7 @@ friction-*.log
 
 # Test artifacts
 test-*.tmp
+
+# Backup and launcher scripts
+*.bak
+launch-agent-*.sh
