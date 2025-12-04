@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# sane-get-tool - Get platform-specific tool paths
+# Usage: sane-get-tool TOOL_NAME [PLATFORM]
+# Examples:
+#   sane-get-tool grep                 # Uses current platform
+#   sane-get-tool grep Darwin          # Explicit platform
+#   sane-get-tool sed Linux
+# Returns: {tool, path, found: true/false}
+
+set -euo pipefail
+
+TOOL_NAME="${1:-}"
+PLATFORM="${2:-}"
+
+if [[ -z "$TOOL_NAME" ]]; then
+    echo "Error: TOOL_NAME required" >&2
+    echo "Usage: sane-get-tool TOOL_NAME [PLATFORM]" >&2
+    exit 1
+fi
+
+# Detect platform if not specified
+if [[ -z "$PLATFORM" ]]; then
+    PLATFORM=$(uname -s)
+fi
+
+# Function to find a tool and return its path
+find_tool() {
+    local tool="$1"
+    local platform="$2"
+    
+    case "$platform" in
+        Darwin)
+            # macOS: Try GNU tools first (ggrep, gsed, gawk), then BSD versions
+            case "$tool" in
+                grep)
+                    if command -v ggrep &> /dev/null; then
+                        echo "ggrep"
+                    elif command -v grep &> /dev/null; then
+                        echo "grep"
+                    else
+                        echo ""
+                    fi
+                    ;;
+                sed)
+                    if command -v gsed &> /dev/null; then
+                        echo "gsed"
+                    elif command -v sed &> /dev/null; then
+                        echo "sed"
+                    else
+                        echo ""
+                    fi
+                    ;;
+                awk)
+                    if command -v gawk &> /dev/null; then
+                        echo "gawk"
+                    elif command -v awk &> /dev/null; then
+                        echo "awk"
+                    else
+                        echo ""
+                    fi
+                    ;;
+                *)
+                    if command -v "$tool" &> /dev/null; then
+                        echo "$tool"
+                    else
+                        echo ""
+                    fi
+                    ;;
+            esac
+            ;;
+        Linux|FreeBSD|OpenBSD|NetBSD)
+            # Linux/BSD: Standard GNU tools
+            if command -v "$tool" &> /dev/null; then
+                echo "$tool"
+            else
+                echo ""
+            fi
+            ;;
+        *)
+            # Unknown platform: try generic lookup
+            if command -v "$tool" &> /dev/null; then
+                echo "$tool"
+            else
+                echo ""
+            fi
+            ;;
+    esac
+}
+
+# Find the tool
+TOOL_PATH=$(find_tool "$TOOL_NAME" "$PLATFORM")
+
+# Determine if tool was found
+if [[ -n "$TOOL_PATH" ]]; then
+    FOUND="true"
+    # Get full path if just command name
+    if [[ "$TOOL_PATH" == /* ]]; then
+        FULL_PATH="$TOOL_PATH"
+    else
+        FULL_PATH=$(command -v "$TOOL_PATH" 2>/dev/null || echo "$TOOL_PATH")
+    fi
+else
+    FOUND="false"
+    FULL_PATH=""
+fi
+
+# Output JSON
+JSON="{\"tool\":\"$TOOL_NAME\",\"path\":\"$FULL_PATH\",\"found\":$FOUND,\"platform\":\"$PLATFORM\"}"
+echo "$JSON"

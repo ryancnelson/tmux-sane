@@ -78,10 +78,6 @@ Prioritized improvements for the tmux-sane project.
   - sane-transfer-to-workstation
   - sane-transfer-from-workstation
 
-- [ ] **Platform-specific tool mapping**
-  - Detect and use correct grep/awk/sed for platform
-  - ggrep vs grep, etc.
-
 ## Priority 4: Research / Future
 
 - [ ] **Integration with ask-* scripts**
@@ -272,6 +268,13 @@ After running tests, update this section:
        - Uses base64 encoding for complex content with special shell characters
        - Auto-backups existing files to /var/tmp/ with timestamp
        - Returns JSON: {status, path, checksum, backup_path, size_bytes}
-       - Handles special characters (quotes, newlines, JSON content)
-       - Full test coverage (16/16 tests passing)
-       - Works across different platforms and panes
+        - Handles special characters (quotes, newlines, JSON content)
+        - Full test coverage (16/16 tests passing)
+        - Works across different platforms and panes
+
+- [x] **Implement sane-get-tool** (Iteration 10)
+      - Platform-specific tool mapping (grep/ggrep, sed/gsed, awk/gawk)
+      - Returns JSON with tool, path, found status
+      - Supports explicit platform override for testing
+      - Full test coverage (15/15 tests passing)
+      - Enables reliable tool path resolution across macOS/Linux/FreeBSD
