@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# sane-run-command - Execute a command in a tmux pane and return structured output
+# Usage: sane-run-command SESSION[:WINDOW.PANE] "command" [timeout_seconds]
+# Examples:
+#   sane-run-command tues:0.0 "ls -la"
+#   sane-run-command tues:0.0 "ls -la" 60
+#   sane-run-command tues "pwd"
+#
+# Returns JSON: {output, exit_code, duration_ms}
+# Example output:
+#   {"output":"hello\nworld","exit_code":0,"duration_ms":245}
+#
+# Implementation notes:
+# - Uses tmux capture-pane to read output (works with remote SSH panes)
+# - Sends unique markers to detect command completion
+# - Parses PS1 prompt to extract exit code when available
+
+set -euo pipefail
+
+TARGET="${1:-}"
+COMMAND="${2:-}"
+TIMEOUT="${3:-30}"
+
+if [[ -z "$TARGET" ]] || [[ -z "$COMMAND" ]]; then
+    echo "Usage: sane-run-command SESSION[:WINDOW.PANE] \"command\" [timeout_seconds]" >&2
+    exit 1
+fi
+
+# Validate timeout is a number
+if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]]; then
+    echo "Error: timeout must be a number, got '$TIMEOUT'" >&2
+    exit 1
+fi
+
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check if session exists (extract session name from target)
+SESSION=$(echo "$TARGET" | cut -d: -f1)
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "Error: Session '$SESSION' does not exist" >&2
+    exit 1
+fi
+
+# Validate pane target if specified (SESSION:WINDOW.PANE format)
+if [[ "$TARGET" == *":"* ]]; then
+    PANE_SPEC=$(echo "$TARGET" | cut -d: -f2)
+    # Validate format: should be WINDOW.PANE or WINDOW
+    if ! echo "$PANE_SPEC" | grep -E '^[0-9]+(\.[0-9]+)?$' > /dev/null; then
+        echo "Error: Invalid pane specification '$PANE_SPEC'. Use format WINDOW or WINDOW.PANE" >&2
+        exit 1
+    fi
+    if ! tmux list-panes -t "$TARGET" > /dev/null 2>&1; then
+        echo "Error: Pane '$TARGET' does not exist" >&2
+        exit 1
+    fi
+else
+    # Use session shorthand (active pane)
+    TARGET="$SESSION"
+fi
+
+# First, validate the bash syntax
+VALIDATION=$("$PROJECT_DIR/sane-validate-bash" "$COMMAND" 2>&1)
+if echo "$VALIDATION" | jq -e '.valid == false' > /dev/null 2>&1; then
+    # Syntax is invalid, return error
+    ERROR_MSG=$(echo "$VALIDATION" | jq -r '.error')
+    echo "{\"output\":\"\",\"exit_code\":1,\"duration_ms\":0,\"error\":\"Bash syntax validation failed: $ERROR_MSG\"}"
+    exit 0
+fi
+
+START_TIME=$(date +%s%N)
+
+# Create unique markers for this command execution
+MARKER_START="SANE_RUN_$$_START_$(date +%s%N)"
+MARKER_END="SANE_RUN_$$_END_$(date +%s%N)"
+
+# Send markers and command using proper quoting so shell expands variables
+# Format: echo START; { command }; echo end:$?
+# The $? will be expanded by the shell in the pane, giving us the exit code
+WRAPPED_CMD="echo $MARKER_START; { $COMMAND; } 2>&1; echo $MARKER_END:\$?"
+
+# Send the command to the pane
+tmux send-keys -t "$TARGET" "$WRAPPED_CMD" Enter
+
+# Wait for completion marker to appear in pane output
+ELAPSED=0
+MAX_WAIT=$TIMEOUT
+
+while [[ $ELAPSED -lt $MAX_WAIT ]]; do
+    PANE_OUTPUT=$(tmux capture-pane -t "$TARGET" -p)
+    
+    # Check if both markers are visible
+    if echo "$PANE_OUTPUT" | grep -q "$MARKER_START" && echo "$PANE_OUTPUT" | grep -q "$MARKER_END"; then
+        # Found both markers, extraction is possible
+        break
+    fi
+    
+    sleep 0.5
+    ((ELAPSED=ELAPSED + 1))
+done
+
+END_TIME=$(date +%s%N)
+
+# Extract output between markers
+PANE_OUTPUT=$(tmux capture-pane -t "$TARGET" -p)
+OUTPUT=""
+EXIT_CODE=1
+
+# Extract text between markers
+# The format is: MARKER_START ... command output ... MARKER_END:exit_code
+# We need to find both markers and extract the exit code from the end marker
+if echo "$PANE_OUTPUT" | grep -q "$MARKER_START" && echo "$PANE_OUTPUT" | grep -q "$MARKER_END"; then
+    # Find the line numbers for markers
+    START_LINE=$(echo "$PANE_OUTPUT" | grep -n "$MARKER_START" | tail -1 | cut -d: -f1)
+    END_LINE=$(echo "$PANE_OUTPUT" | grep -n "$MARKER_END" | tail -1 | cut -d: -f1)
+    
+    if [[ -n "$START_LINE" && -n "$END_LINE" ]]; then
+        # Extract the end marker line to get the exit code
+        END_MARKER_LINE=$(echo "$PANE_OUTPUT" | sed -n "${END_LINE}p")
+        if echo "$END_MARKER_LINE" | grep -q ":"; then
+            # Extract exit code from the end of the line after :
+            EXIT_CODE=$(echo "$END_MARKER_LINE" | grep -o ":[0-9]*$" | sed 's/://')
+        fi
+        
+        # Extract output between the markers (excluding the marker lines themselves)
+        # Lines from (START_LINE + 1) to (END_LINE - 1)
+        if [[ $END_LINE -gt $((START_LINE + 1)) ]]; then
+            OUTPUT=$(echo "$PANE_OUTPUT" | sed -n "$((START_LINE+1)),$((END_LINE-1))p")
+        fi
+    fi
+else
+    # Timeout - markers not found
+    OUTPUT="Command timeout or incomplete output"
+    EXIT_CODE=1
+fi
+
+# Calculate duration in milliseconds
+DURATION_MS=$(( (END_TIME - START_TIME) / 1000000 ))
+
+# Escape output for JSON (handle newlines and special characters)
+# Note: jq -Rs will preserve the output correctly without extra trimming
+OUTPUT_JSON=$(echo "$OUTPUT" | jq -Rs '.')
+
+# Build response JSON
+echo "{\"output\":$OUTPUT_JSON,\"exit_code\":$EXIT_CODE,\"duration_ms\":$DURATION_MS}"
