@@ -89,10 +89,11 @@ Prioritized improvements for the tmux-sane project.
    - Value: Comprehensive agent automation best practices guide ✓
    - Result: Created AGENT-BEST-PRACTICES.md with 8 test suites and complete documentation, 889 lines covering all patterns
 
-- [ ] **Version 0.1 Release** (Iteration 23+)
-  - Create git tag v0.1
-  - Write release notes
-  - Create simple README for distribution
+- [x] **Version 0.1 Release** (Iteration 23)
+  - Create git tag v0.1 ✓
+  - Write release notes ✓ (RELEASE-NOTES.md)
+  - Create comprehensive distribution README ✓ (Enhanced README.md)
+  - Result: v0.1 successfully released with comprehensive documentation
 
 ## Priority 4: Research / Future
 
@@ -409,3 +410,12 @@ After running tests, update this section:
               - Full test coverage (22/22 tests passing)
               - Verified backward compatibility - existing scripts unaffected
               - Production-ready error recovery mechanism
+
+      - [x] **Version 0.1 Release** (Iteration 23)
+              - Created comprehensive release notes (RELEASE-NOTES.md)
+              - Enhanced README.md with command table, examples, and getting started guide
+              - Created git tag v0.1 with full description
+              - Documented all 22 development iterations and 15 implemented commands
+              - 364 tests passing across 24 test suites
+              - Production-ready release with complete documentation
+              - Ready for distribution and integration
