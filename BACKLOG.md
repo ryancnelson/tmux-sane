@@ -5,7 +5,7 @@ Prioritized improvements for the tmux-sane project.
 ## Priority 1: Ready to Implement (30-60 min each)
 
 ### Core Infrastructure
-- [ ] **Fix sane-detect-platform to support pane targeting**
+- [x] **Fix sane-detect-platform to support pane targeting** (Iteration 1)
   - Scope: 45 min
   - Update to accept SESSION:WINDOW.PANE format
   - Add tests for pane targeting
@@ -107,8 +107,13 @@ Prioritized improvements for the tmux-sane project.
   - Established project structure
   - First git commit
 
-- [x] **Platform detection** (Iteration 1)
+- [x] **Platform detection** (Iteration 0)
   - Created lib/platform-detect.sh (local detection)
   - Created sane-detect-platform (in-session detection)
   - Added tests
-  - Works but needs pane targeting support
+  
+- [x] **Add pane targeting to sane-detect-platform** (Iteration 1)
+  - Updated sane-detect-platform to accept SESSION:WINDOW.PANE format
+  - Maintains backward compatibility with session-only format
+  - Added comprehensive test coverage
+  - Foundation for pane-aware commands
