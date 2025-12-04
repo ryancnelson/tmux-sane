@@ -55,12 +55,13 @@ Prioritized improvements for the tmux-sane project.
 
 ## Priority 2: Performance & Reliability (Next)
 
-- [ ] **Performance Profiling** (Iteration 19)
-  - Scope: 45 min
-  - Profile sane-run-command and sane-create-file on large outputs
-  - Identify any bottlenecks >1s
-  - Document performance characteristics
-  - Value: Production readiness
+- [x] **Performance Profiling** (Iteration 19)
+   - Scope: 45 min ✓
+   - Profile sane-run-command and sane-create-file on large outputs ✓
+   - Identify any bottlenecks >1s ✓ (Found: base64 file creation at 1377ms)
+   - Document performance characteristics ✓ (PERFORMANCE-REPORT.md)
+   - Value: Production readiness ✓
+   - Result: Created tests/test-performance.sh with comprehensive benchmarks. Identified one bottleneck: medium file creation with base64 encoding (1377ms). Most operations <700ms. 3 tests timeout due to marker detection in large buffers (fixable in Iteration 20)
 
 - [ ] **Error Recovery Mechanisms** (Iteration 20)
   - Scope: 45 min
@@ -370,12 +371,22 @@ After running tests, update this section:
             - Proved multi-file coordination works reliably
             - Foundation ready for iteration 18 (multi-pane workflows)
 
-    - [x] **Complex Workflow 2: Deploy to Multiple Servers** (Iteration 18)
-            - Created comprehensive test suite (tests/test-multi-server-deploy.sh)
-            - Demonstrated orchestrating deployments to 3 virtual servers
-            - Showed independent health verification and orchestrated checks
-            - Documented multi-server coordination patterns and best practices
-            - Created MULTI-SERVER-DEPLOY.md with real-world application examples
-            - Full test coverage (13/13 tests passing)
-            - Proved multi-server orchestration pattern works reliably
-            - Foundation ready for priority 2 performance and reliability work
+     - [x] **Complex Workflow 2: Deploy to Multiple Servers** (Iteration 18)
+             - Created comprehensive test suite (tests/test-multi-server-deploy.sh)
+             - Demonstrated orchestrating deployments to 3 virtual servers
+             - Showed independent health verification and orchestrated checks
+             - Documented multi-server coordination patterns and best practices
+             - Created MULTI-SERVER-DEPLOY.md with real-world application examples
+             - Full test coverage (13/13 tests passing)
+             - Proved multi-server orchestration pattern works reliably
+             - Foundation ready for priority 2 performance and reliability work
+
+     - [x] **Performance Profiling** (Iteration 19)
+             - Created comprehensive test suite (tests/test-performance.sh)
+             - Profiled sane-run-command with small, medium, and large outputs
+             - Profiled sane-create-file with various file sizes and content types
+             - Identified bottleneck: base64-encoded file creation (1377ms for 13KB)
+             - Documented all performance characteristics in PERFORMANCE-REPORT.md
+             - Most operations perform well (<700ms for typical use cases)
+             - 9/12 tests passing (3 timeout tests fixable with marker detection improvement)
+             - Established baseline performance metrics for future optimization
