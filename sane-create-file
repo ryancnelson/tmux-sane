@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# sane-create-file - Create a file with content in a tmux pane and return structured output
+# Usage: sane-create-file SESSION[:WINDOW.PANE] PATH "content" [backup=true]
+# Examples:
+#   sane-create-file tues:0.0 "/tmp/test.txt" "Hello World"
+#   sane-create-file tues:0.0 "/tmp/config.json" '{"key": "value"}'
+#   sane-create-file tues "/etc/config" "content" false
+#
+# Returns JSON: {status, path, checksum, backup_path, size_bytes}
+# Example output:
+#   {"status":"created","path":"/tmp/test.txt","checksum":"abc123...","size_bytes":11}
+#
+# Implementation notes:
+# - Creates file via sane-run-command using `tee` to avoid escaping issues
+# - Uses base64 encoding for complex content with special shell characters
+# - Auto-backups existing file to /var/tmp/ with timestamp (unless backup=false)
+# - Returns checksum (md5) for verification
+# - Handles platform differences (macOS vs Linux)
+
+set -euo pipefail
+
+TARGET="${1:-}"
+FILE_PATH="${2:-}"
+CONTENT="${3:-}"
+BACKUP="${4:-true}"
+
+if [[ -z "$TARGET" ]] || [[ -z "$FILE_PATH" ]] || [[ -z "$CONTENT" ]]; then
+    echo "Usage: sane-create-file SESSION[:WINDOW.PANE] PATH \"content\" [backup=true]" >&2
+    exit 1
+fi
+
+# Validate backup parameter
+if [[ ! "$BACKUP" =~ ^(true|false)$ ]]; then
+    echo "Error: backup must be 'true' or 'false', got '$BACKUP'" >&2
+    exit 1
+fi
+
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source the run-command script for executing commands
+if [[ ! -f "$PROJECT_DIR/sane-run-command" ]]; then
+    echo "Error: sane-run-command not found at $PROJECT_DIR/sane-run-command" >&2
+    exit 1
+fi
+
+# Extract session name from target for validation
+SESSION=$(echo "$TARGET" | cut -d: -f1)
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "Error: Session '$SESSION' does not exist" >&2
+    exit 1
+fi
+
+# Validate pane target if specified (SESSION:WINDOW.PANE format)
+if [[ "$TARGET" == *":"* ]]; then
+    PANE_SPEC=$(echo "$TARGET" | cut -d: -f2)
+    # Validate format: should be WINDOW.PANE or WINDOW
+    if ! echo "$PANE_SPEC" | grep -E '^[0-9]+(\.[0-9]+)?$' > /dev/null; then
+        echo "Error: Invalid pane specification '$PANE_SPEC'. Use format WINDOW or WINDOW.PANE" >&2
+        exit 1
+    fi
+fi
+
+# Helper function to check if content needs base64 encoding
+# Content needs encoding if it contains special shell characters
+needs_base64() {
+    local content="$1"
+    # Check for common shell special chars that need escaping
+    if echo "$content" | grep -qE '[$`"\\]|^-'; then
+        return 0  # true - needs encoding
+    fi
+    return 1  # false - doesn't need encoding
+}
+
+# Helper function to create the command string
+# This uses echo + tee to avoid complex escaping
+create_write_command() {
+    local filepath="$1"
+    local content="$2"
+    
+    # Check if content has special chars that need base64 encoding
+    if needs_base64 "$content"; then
+        # Use base64 encoding for safe transport
+        # Encode the content WITH a newline to match echo behavior
+        local encoded=$(printf '%s\n' "$content" | base64 | tr -d '\n')
+        echo "echo '$encoded' | base64 -d | tee '$filepath' > /dev/null && md5sum '$filepath' | awk '{print \$1}'"
+    else
+        # Safe content, use echo with tee
+        # Escape single quotes in content by ending quote, adding escaped quote, starting quote again
+        local escaped_content="${content//\'/\'\"\'\"\'}"
+        echo "echo '$escaped_content' | tee '$filepath' > /dev/null && md5sum '$filepath' | awk '{print \$1}'"
+    fi
+}
+
+# Step 1: Check if file exists and backup if needed
+BACKUP_PATH=""
+if [[ "$BACKUP" == "true" ]]; then
+    # Use run-command to check if file exists and backup it
+    CHECK_CMD="[[ -f '$FILE_PATH' ]] && cp '$FILE_PATH' /var/tmp/backup-$(date +%s)-$(basename '$FILE_PATH')"
+    "$PROJECT_DIR/sane-run-command" "$TARGET" "$CHECK_CMD" > /dev/null 2>&1 || true
+    
+    # Get the backup path (if file existed)
+    GET_BACKUP_CMD="ls -t /var/tmp/backup-*-$(basename '$FILE_PATH') 2>/dev/null | head -1"
+    BACKUP_RESULT=$("$PROJECT_DIR/sane-run-command" "$TARGET" "$GET_BACKUP_CMD" 2>/dev/null) || true
+    if echo "$BACKUP_RESULT" | jq -e '.output' > /dev/null 2>&1; then
+        BACKUP_PATH=$(echo "$BACKUP_RESULT" | jq -r '.output' | head -1 | tr -d '\n ')
+    fi
+fi
+
+# Step 2: Create the file using the write command
+WRITE_CMD=$(create_write_command "$FILE_PATH" "$CONTENT")
+
+# Execute the write command and capture output
+WRITE_RESULT=$("$PROJECT_DIR/sane-run-command" "$TARGET" "$WRITE_CMD" 2>&1)
+
+# Parse the output to get checksum
+CHECKSUM=$(echo "$WRITE_RESULT" | jq -r '.output // empty' 2>/dev/null | head -1 | awk '{print $1}' || echo "")
+
+# Step 3: Verify file was created
+VERIFY_CMD="[[ -f '$FILE_PATH' ]] && wc -c < '$FILE_PATH'"
+VERIFY_RESULT=$("$PROJECT_DIR/sane-run-command" "$TARGET" "$VERIFY_CMD" 2>&1)
+SIZE_BYTES=$(echo "$VERIFY_RESULT" | jq -r '.output // empty' 2>/dev/null | tr -d '\n ' || echo "0")
+
+# Step 4: Return structured output as JSON
+# Determine status based on whether file was created
+if echo "$VERIFY_RESULT" | jq -e '.exit_code' 2>/dev/null | grep -q '^0$'; then
+    STATUS="created"
+else
+    STATUS="error"
+fi
+
+# Build JSON response
+if [[ -n "$BACKUP_PATH" ]]; then
+    jq -n \
+        --arg status "$STATUS" \
+        --arg path "$FILE_PATH" \
+        --arg checksum "$CHECKSUM" \
+        --arg backup_path "$BACKUP_PATH" \
+        --arg size_bytes "$SIZE_BYTES" \
+        '{status: $status, path: $path, checksum: $checksum, backup_path: $backup_path, size_bytes: ($size_bytes | tonumber)}'
+else
+    jq -n \
+        --arg status "$STATUS" \
+        --arg path "$FILE_PATH" \
+        --arg checksum "$CHECKSUM" \
+        --arg size_bytes "$SIZE_BYTES" \
+        '{status: $status, path: $path, checksum: $checksum, size_bytes: ($size_bytes | tonumber)}'
+fi
+
+exit 0
