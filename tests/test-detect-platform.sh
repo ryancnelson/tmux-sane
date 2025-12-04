@@ -114,6 +114,52 @@ else
               "$OUTPUT"
 fi
 
+# Test 9: Should work with pane targeting format (WINDOW.PANE)
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+    # Get first pane in first window
+    PANE_TARGET="${SESSION}:0.0"
+    
+    if tmux list-panes -t "$PANE_TARGET" > /dev/null 2>&1; then
+        OUTPUT=$("$DETECT_SCRIPT" "$PANE_TARGET" 2>&1)
+        EXIT_CODE=$?
+        
+        if [[ $EXIT_CODE -eq 0 ]]; then
+            test_pass "Runs successfully with pane target format: $PANE_TARGET"
+        else
+            test_fail "Runs successfully with pane target format" \
+                      "Exit code 0" \
+                      "Exit code $EXIT_CODE: $OUTPUT"
+        fi
+        
+        # Verify JSON output for pane target
+        if echo "$OUTPUT" | jq empty 2>/dev/null; then
+            test_pass "Pane target returns valid JSON"
+        else
+            test_fail "Pane target returns valid JSON" "Valid JSON output" "$OUTPUT"
+        fi
+    fi
+fi
+
+# Test 10: Should fail gracefully with invalid pane format
+OUTPUT=$("$DETECT_SCRIPT" "${SESSION}:invalid-pane-format" 2>&1 || true)
+if echo "$OUTPUT" | grep -q "Invalid pane specification"; then
+    test_pass "Fails gracefully with invalid pane format"
+else
+    test_fail "Fails gracefully with invalid pane format" \
+              "Error message about invalid pane format" \
+              "$OUTPUT"
+fi
+
+# Test 11: Should fail gracefully with non-existent pane
+OUTPUT=$("$DETECT_SCRIPT" "${SESSION}:99.99" 2>&1 || true)
+if echo "$OUTPUT" | grep -q "does not exist\|invalid"; then
+    test_pass "Fails gracefully with non-existent pane"
+else
+    test_fail "Fails gracefully with non-existent pane" \
+              "Error message about pane not existing" \
+              "$OUTPUT"
+fi
+
 echo ""
 echo "Results: $TESTS_PASSED/$TESTS_RUN tests passed"
 

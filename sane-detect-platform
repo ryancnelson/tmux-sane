@@ -1,41 +1,63 @@
 #!/usr/bin/env bash
 # sane-detect-platform - Detect platform inside a tmux session
-# Usage: sane-detect-platform SESSION_NAME
+# Usage: sane-detect-platform SESSION[:WINDOW.PANE]
+# Examples:
+#   sane-detect-platform tues              # Active pane
+#   sane-detect-platform tues:0.0          # Specific pane
+#   sane-detect-platform tues:0            # Window 0, active pane
 
 set -euo pipefail
 
-SESSION="${1:-}"
+TARGET="${1:-}"
 
-if [[ -z "$SESSION" ]]; then
-    echo "Usage: sane-detect-platform SESSION_NAME" >&2
+if [[ -z "$TARGET" ]]; then
+    echo "Usage: sane-detect-platform SESSION[:WINDOW.PANE]" >&2
     exit 1
 fi
 
-# Check if session exists
+# Check if session exists (extract session name from target)
+SESSION=$(echo "$TARGET" | cut -d: -f1)
 if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     echo "Error: Session '$SESSION' does not exist" >&2
     exit 1
+fi
+
+# Validate pane target if specified (SESSION:WINDOW.PANE format)
+if [[ "$TARGET" == *":"* ]]; then
+    PANE_SPEC=$(echo "$TARGET" | cut -d: -f2)
+    # Validate format: should be WINDOW.PANE or WINDOW
+    if ! echo "$PANE_SPEC" | grep -E '^[0-9]+(\.[0-9]+)?$' > /dev/null; then
+        echo "Error: Invalid pane specification '$PANE_SPEC'. Use format WINDOW or WINDOW.PANE" >&2
+        exit 1
+    fi
+    if ! tmux list-panes -t "$TARGET" > /dev/null 2>&1; then
+        echo "Error: Pane '$TARGET' does not exist" >&2
+        exit 1
+    fi
+else
+    # Use session shorthand (active pane)
+    TARGET="$SESSION"
 fi
 
 # Use unique markers to reliably extract command output
 MARKER="SANE_DETECT_$$_$(date +%s)"
 
 # Send all detection commands in one go with markers
-tmux send-keys -t "$SESSION" "echo '${MARKER}_START'" Enter
+tmux send-keys -t "$TARGET" "echo '${MARKER}_START'" Enter
 sleep 0.3
-tmux send-keys -t "$SESSION" "uname -s" Enter
+tmux send-keys -t "$TARGET" "uname -s" Enter
 sleep 0.3
-tmux send-keys -t "$SESSION" "uname -m" Enter
+tmux send-keys -t "$TARGET" "uname -m" Enter
 sleep 0.3
-tmux send-keys -t "$SESSION" "hostname -s 2>/dev/null || hostname | cut -d. -f1" Enter
+tmux send-keys -t "$TARGET" "hostname -s 2>/dev/null || hostname | cut -d. -f1" Enter
 sleep 0.3
-tmux send-keys -t "$SESSION" "whoami" Enter
+tmux send-keys -t "$TARGET" "whoami" Enter
 sleep 0.3
-tmux send-keys -t "$SESSION" "echo '${MARKER}_END'" Enter
+tmux send-keys -t "$TARGET" "echo '${MARKER}_END'" Enter
 sleep 0.5
 
 # Capture output
-FULL_OUTPUT=$(tmux capture-pane -t "$SESSION" -p)
+FULL_OUTPUT=$(tmux capture-pane -t "$TARGET" -p)
 
 # Extract lines between markers, skip command lines (those with $)
 OUTPUT=$(echo "$FULL_OUTPUT" | sed -n "/${MARKER}_START/,/${MARKER}_END/p" | grep -v "${MARKER}" | grep -v '\$')
