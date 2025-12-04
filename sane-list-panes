@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# sane-list-panes - List all panes in a tmux session with basic info
+# sane-list-panes - List all panes in a tmux session with basic info and labels
 # Usage: sane-list-panes SESSION
 # Example:
 #   sane-list-panes tues
-# Output: JSON format with panes array
+# Output: JSON format with panes array including labels from context database
 
 set -euo pipefail
 
@@ -22,6 +22,25 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     echo "Error: Session '$SESSION' does not exist" >&2
     exit 1
 fi
+
+# Load context database helper
+CONTEXT_HOME="${TMUX_SANE_CONTEXT_HOME:-.tmux-sane}"
+CONTEXTS_FILE="$CONTEXT_HOME/contexts.json"
+
+# Helper function to get label for a pane
+get_pane_label() {
+    local pane_target="$1"
+    
+    # Return empty label if contexts file doesn't exist
+    if [[ ! -f "$CONTEXTS_FILE" ]]; then
+        echo ""
+        return
+    fi
+    
+    # Extract label from context (returns empty string if not found)
+    local label=$(jq -r ".\"$pane_target\".label // empty" "$CONTEXTS_FILE" 2>/dev/null)
+    echo "$label"
+}
 
 # Collect pane information in JSON format
 # Using pipe-delimited format for reliable parsing
@@ -43,12 +62,24 @@ while IFS='|' read -r id window index command path; do
     command_json=$(echo "$command" | sed 's/\\/\\\\/g; s/"/\\"/g')
     path_json=$(echo "$path" | sed 's/\\/\\\\/g; s/"/\\"/g')
     
+    # Build pane target for looking up label
+    pane_target="$SESSION:$window.$index"
+    label=$(get_pane_label "$pane_target")
+    
+    # Escape label for JSON
+    label_json=$(echo "$label" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    
     echo -n "    {"
     echo -n "\"id\": \"$id\", "
     echo -n "\"window\": $window, "
     echo -n "\"index\": $index, "
     echo -n "\"command\": \"$command_json\", "
-    echo -n "\"path\": \"$path_json\""
+    echo -n "\"path\": \"$path_json\", "
+    if [[ -z "$label" ]]; then
+        echo -n "\"label\": null"
+    else
+        echo -n "\"label\": \"$label_json\""
+    fi
     echo -n "}"
 done <<< "$PANES_OUTPUT"
 

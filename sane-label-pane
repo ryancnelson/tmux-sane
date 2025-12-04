@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# sane-label-pane - Label a tmux pane in the context database
+# Usage: sane-label-pane PANE_TARGET LABEL
+# Examples:
+#   sane-label-pane "tues:0.0" "primary-shell"
+#   sane-label-pane "tues:0.1" "database-server"
+# Output: JSON format with status and details
+
+set -euo pipefail
+
+PANE_TARGET="${1:-}"
+LABEL="${2:-}"
+
+if [[ -z "$PANE_TARGET" ]] || [[ -z "$LABEL" ]]; then
+    echo "Usage: sane-label-pane PANE_TARGET LABEL" >&2
+    echo "Example: sane-label-pane 'tues:0.0' 'primary-shell'" >&2
+    exit 1
+fi
+
+# Validate pane target format (SESSION:WINDOW.PANE)
+if [[ ! "$PANE_TARGET" =~ ^[^:]+:[0-9]+\.[0-9]+$ ]]; then
+    echo "{\"status\": \"error\", \"message\": \"Invalid pane target format. Use SESSION:WINDOW.PANE (e.g., tues:0.0)\"}" >&2
+    exit 1
+fi
+
+# Extract session name
+SESSION=$(echo "$PANE_TARGET" | cut -d: -f1)
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "{\"status\": \"error\", \"message\": \"Session '$SESSION' does not exist\"}" >&2
+    exit 1
+fi
+
+# Check if pane exists
+if ! tmux select-pane -t "$PANE_TARGET" 2>/dev/null; then
+    echo "{\"status\": \"error\", \"message\": \"Pane '$PANE_TARGET' does not exist\"}" >&2
+    exit 1
+fi
+
+# Find the context database script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONTEXT_DB_SCRIPT="$SCRIPT_DIR/sane-context-database"
+
+if [[ ! -f "$CONTEXT_DB_SCRIPT" ]]; then
+    echo "{\"status\": \"error\", \"message\": \"Context database script not found\"}" >&2
+    exit 1
+fi
+
+# Check if context exists, create if needed
+CONTEXT_HOME="${TMUX_SANE_CONTEXT_HOME:-.tmux-sane}"
+mkdir -p "$CONTEXT_HOME"
+CONTEXTS_FILE="$CONTEXT_HOME/contexts.json"
+
+if [[ ! -f "$CONTEXTS_FILE" ]]; then
+    echo "{}" > "$CONTEXTS_FILE"
+fi
+
+# Check if pane has context; if not, create one with the label
+if ! "$CONTEXT_DB_SCRIPT" read "$PANE_TARGET" > /dev/null 2>&1; then
+    # Create new context with label
+    "$CONTEXT_DB_SCRIPT" create "$PANE_TARGET" --label "$LABEL" > /dev/null 2>&1
+    echo "{\"status\": \"created_with_label\", \"pane\": \"$PANE_TARGET\", \"label\": \"$LABEL\"}"
+else
+    # Update existing context with new label
+    "$CONTEXT_DB_SCRIPT" update "$PANE_TARGET" --label "$LABEL" > /dev/null 2>&1
+    echo "{\"status\": \"labeled\", \"pane\": \"$PANE_TARGET\", \"label\": \"$LABEL\"}"
+fi

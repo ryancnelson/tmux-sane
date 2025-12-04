@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# sane-get-label - Get the label for a tmux pane from context database
+# Usage: sane-get-label PANE_TARGET
+# Examples:
+#   sane-get-label "tues:0.0"
+# Output: JSON format with label or error
+
+set -euo pipefail
+
+PANE_TARGET="${1:-}"
+
+if [[ -z "$PANE_TARGET" ]]; then
+    echo "Usage: sane-get-label PANE_TARGET" >&2
+    echo "Example: sane-get-label 'tues:0.0'" >&2
+    exit 1
+fi
+
+# Validate pane target format (SESSION:WINDOW.PANE)
+if [[ ! "$PANE_TARGET" =~ ^[^:]+:[0-9]+\.[0-9]+$ ]]; then
+    echo "{\"status\": \"error\", \"message\": \"Invalid pane target format. Use SESSION:WINDOW.PANE (e.g., tues:0.0)\"}" >&2
+    exit 1
+fi
+
+# Extract session name
+SESSION=$(echo "$PANE_TARGET" | cut -d: -f1)
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "{\"status\": \"error\", \"message\": \"Session '$SESSION' does not exist\"}" >&2
+    exit 1
+fi
+
+# Check if pane exists
+if ! tmux select-pane -t "$PANE_TARGET" 2>/dev/null; then
+    echo "{\"status\": \"error\", \"message\": \"Pane '$PANE_TARGET' does not exist\"}" >&2
+    exit 1
+fi
+
+# Find the context database script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONTEXT_DB_SCRIPT="$SCRIPT_DIR/sane-context-database"
+
+if [[ ! -f "$CONTEXT_DB_SCRIPT" ]]; then
+    echo "{\"status\": \"error\", \"message\": \"Context database script not found\"}" >&2
+    exit 1
+fi
+
+# Ensure context database exists
+CONTEXT_HOME="${TMUX_SANE_CONTEXT_HOME:-.tmux-sane}"
+mkdir -p "$CONTEXT_HOME"
+CONTEXTS_FILE="$CONTEXT_HOME/contexts.json"
+
+if [[ ! -f "$CONTEXTS_FILE" ]]; then
+    echo "{}" > "$CONTEXTS_FILE"
+fi
+
+# Try to read context and extract label
+RESULT=0
+CONTEXT=$("$CONTEXT_DB_SCRIPT" read "$PANE_TARGET" 2>&1) || RESULT=$?
+
+if [[ $RESULT -ne 0 ]]; then
+    echo "{\"status\": \"error\", \"pane\": \"$PANE_TARGET\", \"message\": \"No context found for pane\"}" >&2
+    exit 1
+fi
+
+# Extract label from context (could be empty string)
+LABEL=$(echo "$CONTEXT" | jq -r '.label // empty')
+
+if [[ -z "$LABEL" ]]; then
+    echo "{\"status\": \"no_label\", \"pane\": \"$PANE_TARGET\", \"label\": null}"
+else
+    echo "{\"status\": \"found\", \"pane\": \"$PANE_TARGET\", \"label\": \"$LABEL\"}"
+fi

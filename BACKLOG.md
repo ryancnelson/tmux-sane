@@ -51,20 +51,22 @@ Prioritized improvements for the tmux-sane project.
 ## Priority 2: Important but Need Breakdown
 
 - [x] **Implement sane-run-command** (Iteration 7)
-  - Full implementation with tmux capture-pane integration
-  - Works with remote SSH panes, local panes
-  - Returns JSON with output, exit_code, duration_ms
-  - All 16 tests passing
+   - Full implementation with tmux capture-pane integration
+   - Works with remote SSH panes, local panes
+   - Returns JSON with output, exit_code, duration_ms
+   - All 16 tests passing
 
 - [x] **Implement sane-create-file** (Iteration 8)
-   - With base64 encoding, backup mechanism
-   - Depends on: run-command
-   - Full test coverage (16/16 tests passing)
+    - With base64 encoding, backup mechanism
+    - Depends on: run-command
+    - Full test coverage (16/16 tests passing)
 
-- [ ] **Pane labeling system**
-  - sane-label-pane, sane-get-label
-  - Update list-panes to show labels
-  - Storage in context database
+- [x] **Pane labeling system** (Iteration 9)
+   - sane-label-pane: Label panes in context database, auto-creates context if needed
+   - sane-get-label: Retrieve labels for panes, handles missing labels gracefully
+   - Updated sane-list-panes to show labels from context database
+   - Storage in context database fully integrated
+   - Full test coverage (15/15 tests passing)
 
 ## Priority 3: Nice to Have
 
