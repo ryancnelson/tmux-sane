@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# sane-list-panes - List all panes in a tmux session with basic info
+# Usage: sane-list-panes SESSION
+# Example:
+#   sane-list-panes tues
+# Output: JSON format with panes array
+
+set -euo pipefail
+
+TARGET="${1:-}"
+
+if [[ -z "$TARGET" ]]; then
+    echo "Usage: sane-list-panes SESSION" >&2
+    exit 1
+fi
+
+# Extract session name from target (in case pane spec is included)
+SESSION=$(echo "$TARGET" | cut -d: -f1)
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "Error: Session '$SESSION' does not exist" >&2
+    exit 1
+fi
+
+# Collect pane information in JSON format
+# Using pipe-delimited format for reliable parsing
+PANES_OUTPUT=$(tmux list-panes -t "$SESSION" -F '#{pane_id}|#{window_index}|#{pane_index}|#{pane_current_command}|#{pane_current_path}')
+
+# Build JSON output
+echo "{"
+echo "  \"session\": \"$SESSION\","
+echo "  \"panes\": ["
+
+FIRST_PANE=true
+while IFS='|' read -r id window index command path; do
+    if [[ "$FIRST_PANE" == "false" ]]; then
+        echo ","
+    fi
+    FIRST_PANE=false
+    
+    # Escape special characters in JSON strings
+    command_json=$(echo "$command" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    path_json=$(echo "$path" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    
+    echo -n "    {"
+    echo -n "\"id\": \"$id\", "
+    echo -n "\"window\": $window, "
+    echo -n "\"index\": $index, "
+    echo -n "\"command\": \"$command_json\", "
+    echo -n "\"path\": \"$path_json\""
+    echo -n "}"
+done <<< "$PANES_OUTPUT"
+
+echo ""
+echo "  ]"
+echo "}"
