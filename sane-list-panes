@@ -42,9 +42,10 @@ get_pane_label() {
     echo "$label"
 }
 
-# Collect pane information in JSON format
+# Collect pane information in JSON format from ALL windows in the session
 # Using pipe-delimited format for reliable parsing
-PANES_OUTPUT=$(tmux list-panes -t "$SESSION" -F '#{pane_id}|#{window_index}|#{pane_index}|#{pane_current_command}|#{pane_current_path}')
+# Note: tmux list-panes -a lists all panes from all sessions, so we need to filter
+PANES_OUTPUT=$(tmux list-panes -a -F '#{session_name}|#{pane_id}|#{window_index}|#{pane_index}|#{pane_current_command}|#{pane_current_path}' | grep "^$SESSION|")
 
 # Build JSON output
 echo "{"
@@ -52,7 +53,7 @@ echo "  \"session\": \"$SESSION\","
 echo "  \"panes\": ["
 
 FIRST_PANE=true
-while IFS='|' read -r id window index command path; do
+while IFS='|' read -r session_name id window index command path; do
     if [[ "$FIRST_PANE" == "false" ]]; then
         echo ","
     fi

@@ -100,10 +100,18 @@ execute_once() {
     while [[ $elapsed -lt $max_wait ]]; do
         local pane_output=$(tmux capture-pane -t "$TARGET" -p)
         
-        # Check if both markers are visible
+        # Check if both markers are visible AND on separate lines
+        # This avoids detecting the markers in the echoed command line
         if echo "$pane_output" | grep -q "$marker_start" && echo "$pane_output" | grep -q "$marker_end"; then
-            # Found both markers, extraction is possible
-            break
+            # Verify they're on different lines by checking line numbers
+            local start_line=$(echo "$pane_output" | grep -n "$marker_start" | tail -1 | cut -d: -f1)
+            local end_line=$(echo "$pane_output" | grep -n "$marker_end" | tail -1 | cut -d: -f1)
+            
+            # Only break if markers are on different lines
+            if [[ -n "$start_line" && -n "$end_line" && "$start_line" != "$end_line" ]]; then
+                # Found both markers on separate lines, extraction is possible
+                break
+            fi
         fi
         
         sleep 0.5
