@@ -37,12 +37,13 @@ Prioritized improvements for the tmux-sane project.
     - Result: All 13 tests passed. Created tests/test-network-device-cli.sh
 
 ### Sample Agent Workflows
-- [ ] **Simple Automation: Multi-file Project Creation** (Iteration 17)
-  - Scope: 45 min
-  - Create 5 files with different content types (bash, JSON, markdown)
-  - Use sane-* primitives to build a small project structure
-  - Document the workflow
-  - Value: Shows practical agent usage
+- [x] **Simple Automation: Multi-file Project Creation** (Iteration 17)
+  - Scope: 45 min ✓
+  - Create 5 files with different content types (bash, JSON, markdown) ✓
+  - Use sane-* primitives to build a small project structure ✓
+  - Document the workflow ✓ (SAMPLE-WORKFLOW-MULTIFILE.md)
+  - Value: Shows practical agent usage ✓
+  - Result: All 16 tests passed. Created tests/test-sample-workflow-multifile.sh and SAMPLE-WORKFLOW-MULTIFILE.md documentation
 
 - [ ] **Complex Workflow: Deploy to Multiple Servers** (Iteration 18)
   - Scope: 60 min
@@ -348,12 +349,22 @@ After running tests, update this section:
             - Demonstrated common DevOps workflow with nested tmux
             - Foundation ready for remaining edge case test (iteration 16)
 
-    - [x] **Edge Case Test 4: Network Device CLI** (Iteration 16)
-            - Created comprehensive test suite (tests/test-network-device-cli.sh)
-            - Built mock network device shell simulator (Cisco-like CLI)
-            - Verified platform detection works on non-bash environments
-            - Verified bash commands fail gracefully in raw mode
-            - Verified system completes without hanging on network devices
-            - Full test coverage (13/13 tests passing)
-            - Demonstrated graceful degradation for constrained environments
-            - Completed "Proving Phase" edge case testing (4 of 4 completed)
+     - [x] **Edge Case Test 4: Network Device CLI** (Iteration 16)
+             - Created comprehensive test suite (tests/test-network-device-cli.sh)
+             - Built mock network device shell simulator (Cisco-like CLI)
+             - Verified platform detection works on non-bash environments
+             - Verified bash commands fail gracefully in raw mode
+             - Verified system completes without hanging on network devices
+             - Full test coverage (13/13 tests passing)
+             - Demonstrated graceful degradation for constrained environments
+             - Completed "Proving Phase" edge case testing (4 of 4 completed)
+
+   - [x] **Sample Workflow 1: Multi-file Project Creation** (Iteration 17)
+           - Created comprehensive test suite (tests/test-sample-workflow-multifile.sh)
+           - Demonstrated sequential file creation with multiple file types
+           - Showed JSON/bash validation before file creation patterns
+           - Documented real-world agent workflows and best practices
+           - Created SAMPLE-WORKFLOW-MULTIFILE.md with patterns and examples
+           - Full test coverage (16/16 tests passing)
+           - Proved multi-file coordination works reliably
+           - Foundation ready for iteration 18 (multi-pane workflows)
