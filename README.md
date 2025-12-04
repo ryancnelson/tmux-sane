@@ -29,11 +29,12 @@ Current issues with AI-controlled tmux sessions:
 - Common syntax errors (jq, JSON, bash) waste tokens and create friction
 - Agents improvise at keystroke level leading to inconsistent behavior
 
-## 15 Available Commands
+## 16 Available Commands
 
 | Command | Purpose |
 |---------|---------|
 | `sane-detect-platform` | Detect OS, architecture, hostname, user |
+| `sane-detect-mode` | Detect bash vs raw mode in panes |
 | `sane-list-panes` | List all panes with metadata |
 | `sane-run-command` | Execute commands with reliable output capture |
 | `sane-create-file` | Create files with automatic escaping |
@@ -81,6 +82,18 @@ $ ./sane-detect-platform tues:0.1  # Even over SSH!
   "hostname": "prod-server-01",
   "user": "ubuntu",
   "shell": "bash"
+}
+```
+
+### Detect mode (bash vs raw) in panes
+```bash
+$ ./sane-detect-mode tues:0.0
+{
+  "mode": "bash",
+  "shell": "bash",
+  "capabilities": ["run_command", "create_file", "read_file", "validate_bash", "validate_json"],
+  "supports_structured_prompt": true,
+  "bash_specific": {"command_name": "-bash"}
 }
 ```
 
