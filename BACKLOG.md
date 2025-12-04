@@ -21,18 +21,19 @@ Prioritized improvements for the tmux-sane project.
    - Value: Identifies edge case handling needs
    - Result: All 15 tests passed. Created tests/test-repl.sh
 
-- [ ] **Test 3: Network Device CLI** (Iteration 15)
-  - Scope: 45 min
-  - Setup: SSH to router or network device (or mock)
-  - Expected: Detection works, bash commands fail gracefully
-  - Expected: System knows it's in "raw mode"
-  - Value: Real-world network automation scenario
+- [x] **Test 3: Nested tmux Sessions** (Iteration 15)
+   - Scope: 45 min
+   - Setup: Attach to remote tmux from within local tmux
+   - Expected: Commands target correct tmux server ✓
+   - Value: Common DevOps workflow ✓
+   - Result: All 14 tests passed. Created tests/test-nested-tmux.sh
 
-- [ ] **Test 4: Nested tmux Sessions** (Iteration 16)
-  - Scope: 45 min
-  - Setup: Attach to remote tmux from within local tmux
-  - Expected: Commands target correct tmux server
-  - Value: Common DevOps workflow
+- [ ] **Test 4: Network Device CLI** (Iteration 16)
+   - Scope: 45 min
+   - Setup: SSH to router or network device (or mock)
+   - Expected: Detection works, bash commands fail gracefully
+   - Expected: System knows it's in "raw mode"
+   - Value: Real-world network automation scenario
 
 ### Sample Agent Workflows
 - [ ] **Simple Automation: Multi-file Project Creation** (Iteration 17)
@@ -326,12 +327,22 @@ After running tests, update this section:
           - Proved cross-platform awareness works in real SSH scenario
           - Foundation ready for remaining edge case tests (iterations 14-16)
 
-  - [x] **Edge Case Test 2: Non-Bash REPL (Python/Node/Perl)** (Iteration 14)
-          - Created comprehensive test suite (tests/test-repl.sh)
-          - Verified Python REPL (>>>) is detected as non-bash
-          - Verified Node.js REPL (>) is detected as non-bash
-          - Verified Perl REPL (DB<) is detected as non-bash
-          - Verified sane-detect-platform gracefully handles non-bash environments
-          - Full test coverage (15/15 tests passing)
-          - Identified that sane-* commands require bash shells for proper operation
-          - Foundation ready for remaining edge case tests (iterations 15-16)
+   - [x] **Edge Case Test 2: Non-Bash REPL (Python/Node/Perl)** (Iteration 14)
+           - Created comprehensive test suite (tests/test-repl.sh)
+           - Verified Python REPL (>>>) is detected as non-bash
+           - Verified Node.js REPL (>) is detected as non-bash
+           - Verified Perl REPL (DB<) is detected as non-bash
+           - Verified sane-detect-platform gracefully handles non-bash environments
+           - Full test coverage (15/15 tests passing)
+           - Identified that sane-* commands require bash shells for proper operation
+           - Foundation ready for remaining edge case tests (iterations 15-16)
+
+   - [x] **Edge Case Test 3: Nested tmux Sessions** (Iteration 15)
+           - Created comprehensive test suite (tests/test-nested-tmux.sh)
+           - Verified nested tmux server creation via alternate socket (/tmp/nested-tmux.sock)
+           - Verified parent session detection and operations
+           - Verified context isolation between parent and nested environments
+           - Verified sane-* commands target correct tmux server by default
+           - Full test coverage (14/14 tests passing)
+           - Demonstrated common DevOps workflow with nested tmux
+           - Foundation ready for remaining edge case test (iteration 16)
