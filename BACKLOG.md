@@ -13,12 +13,13 @@ Prioritized improvements for the tmux-sane project.
   - Value: Proves cross-platform awareness works in real scenario
   - Result: All 9 tests passed. Created tests/test-multi-host-ssh.sh
 
-- [ ] **Test 2: Non-Bash REPL (Python/Node/Perl)** (Iteration 14)
-  - Scope: 45 min
-  - Setup: Launch Python, Node.js, or Perl REPL in a pane
-  - Expected: sane-detect-platform handles gracefully
-  - Expected: System identifies non-bash environment
-  - Value: Identifies edge case handling needs
+- [x] **Test 2: Non-Bash REPL (Python/Node/Perl)** (Iteration 14)
+   - Scope: 45 min
+   - Setup: Launch Python, Node.js, or Perl REPL in a pane
+   - Expected: sane-detect-platform handles gracefully ✓
+   - Expected: System identifies non-bash environment ✓
+   - Value: Identifies edge case handling needs
+   - Result: All 15 tests passed. Created tests/test-repl.sh
 
 - [ ] **Test 3: Network Device CLI** (Iteration 15)
   - Scope: 45 min
@@ -316,11 +317,21 @@ After running tests, update this section:
          - Planning next 8 iterations (13-20) with clear theme
          - See STRATEGIC-REVIEW-CHECKLIST.md for full review
 
- - [x] **Edge Case Test 1: Multi-Host SSH Session** (Iteration 13)
-         - Created comprehensive test suite (tests/test-multi-host-ssh.sh)
-         - Verified sane-detect-platform works with remote panes
-         - Verified sane-run-command executes on remote hosts
-         - Verified context database tracks remote pane metadata
-         - Full test coverage (9/9 tests passing)
-         - Proved cross-platform awareness works in real SSH scenario
-         - Foundation ready for remaining edge case tests (iterations 14-16)
+  - [x] **Edge Case Test 1: Multi-Host SSH Session** (Iteration 13)
+          - Created comprehensive test suite (tests/test-multi-host-ssh.sh)
+          - Verified sane-detect-platform works with remote panes
+          - Verified sane-run-command executes on remote hosts
+          - Verified context database tracks remote pane metadata
+          - Full test coverage (9/9 tests passing)
+          - Proved cross-platform awareness works in real SSH scenario
+          - Foundation ready for remaining edge case tests (iterations 14-16)
+
+  - [x] **Edge Case Test 2: Non-Bash REPL (Python/Node/Perl)** (Iteration 14)
+          - Created comprehensive test suite (tests/test-repl.sh)
+          - Verified Python REPL (>>>) is detected as non-bash
+          - Verified Node.js REPL (>) is detected as non-bash
+          - Verified Perl REPL (DB<) is detected as non-bash
+          - Verified sane-detect-platform gracefully handles non-bash environments
+          - Full test coverage (15/15 tests passing)
+          - Identified that sane-* commands require bash shells for proper operation
+          - Foundation ready for remaining edge case tests (iterations 15-16)
