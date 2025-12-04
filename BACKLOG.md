@@ -76,9 +76,11 @@ Prioritized improvements for the tmux-sane project.
   - Full test coverage (16/16 tests passing)
   - Enables feedback loop for continuous improvement
 
-- [ ] **Wormhole file transfer integration**
-  - sane-transfer-to-workstation
-  - sane-transfer-from-workstation
+- [x] **Wormhole file transfer integration** (Iteration 12)
+   - sane-transfer-to-workstation: Transfer files from remote panes to local workstation
+   - sane-transfer-from-workstation: Transfer files from local workstation to remote panes
+   - Full test coverage (15/15 tests passing)
+   - Enables reliable file transfers across panes using wormhole protocol
 
 ## Priority 4: Research / Future
 
@@ -282,9 +284,16 @@ After running tests, update this section:
       - Enables reliable tool path resolution across macOS/Linux/FreeBSD
 
 - [x] **Implement friction logging system** (Iteration 11)
-      - sane-log-operation: Logs operations to ~/.tmux-sane/friction.jsonl
-      - sane-friction-analysis: Analyzes logs for patterns and statistics
-      - Tracks: timestamp, event type, command, platform, validation status, exit code, duration
-      - Analysis output: validation stats, event distribution, failure patterns, platform stats, performance metrics
-      - Full test coverage (16/16 tests passing)
-      - Enables data-driven improvements based on friction patterns
+       - sane-log-operation: Logs operations to ~/.tmux-sane/friction.jsonl
+       - sane-friction-analysis: Analyzes logs for patterns and statistics
+       - Tracks: timestamp, event type, command, platform, validation status, exit code, duration
+       - Analysis output: validation stats, event distribution, failure patterns, platform stats, performance metrics
+       - Full test coverage (16/16 tests passing)
+       - Enables data-driven improvements based on friction patterns
+
+- [x] **Implement wormhole file transfer integration** (Iteration 12)
+       - sane-transfer-to-workstation: Transfer files from remote panes to local workstation using wormhole
+       - sane-transfer-from-workstation: Transfer files from local workstation to remote panes using wormhole
+       - Validates file existence, calculates checksums, handles error conditions gracefully
+       - Full test coverage (15/15 tests passing)
+       - Enables reliable file transfers across panes and hosts using wormhole protocol
