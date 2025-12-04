@@ -22,6 +22,12 @@ Welcome! You're working on **tmux-sane** - a structured protocol for AI agents t
 1. **Check the backlog**: `cat BACKLOG.md`
 2. **Pick ONE Priority 1 item** (30-60 min scope)
 3. **Start iteration**: `./scripts/next-iteration.sh <feature-name>`
+   - ⚠️ **Known issue**: The script can't actually switch your git branch (subprocess limitation)
+   - **What to do**: After running the script, manually switch to the branch it created:
+     ```bash
+     git checkout -b iteration-N-<feature-name>
+     ```
+   - Or check `git branch` and switch to the new branch
 4. **Write tests first** (in `tests/`)
 5. **Implement** (in `lib/` or root for commands)
 6. **Run tests**: `./tests/test-*.sh`
@@ -81,7 +87,17 @@ git commit -m "feat: add new feature"
 ✅ **One task only:** No scope creep
 ✅ **Document as you go:** Update relevant docs
 
-## When You're Stuck
+## Common Issues & Solutions
+
+### "The script said it created a branch but I'm still on main"
+This is normal! Bash scripts run in subprocesses and can't change the parent shell's branch.
+
+**Solution:** After running `./scripts/next-iteration.sh`, check `git branch` to see the new branch name, then:
+```bash
+git checkout iteration-N-<feature-name>
+```
+
+### When You're Stuck
 
 1. **Too complex?** → Break into smaller pieces, update BACKLOG.md
 2. **Not sure what to work on?** → Pick easiest Priority 1 item
