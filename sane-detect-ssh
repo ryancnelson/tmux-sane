@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# sane-detect-ssh - Detect if a pane is SSH'd to a remote host
+# Usage: sane-detect-ssh PANE_TARGET [--update-context] [--label LABEL]
+# Examples:
+#   sane-detect-ssh "tues:0.0"                          # Check if pane is SSH'd
+#   sane-detect-ssh "tues:0.0" --update-context         # Check and update context database
+#   sane-detect-ssh "tues:0.0" --label "prod-server"    # Check and label if SSH
+# Output: JSON format with SSH detection details
+
+set -euo pipefail
+
+PANE_TARGET="${1:-}"
+UPDATE_CONTEXT=false
+LABEL_NAME=""
+
+# Parse additional arguments
+shift || true
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --update-context)
+            UPDATE_CONTEXT=true
+            shift
+            ;;
+        --label)
+            LABEL_NAME="${2:-}"
+            if [[ -z "$LABEL_NAME" ]]; then
+                echo "{\"error\": \"--label requires a label value\"}" >&2
+                exit 1
+            fi
+            shift 2
+            ;;
+        *)
+            echo "Error: Unknown option '$1'" >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [[ -z "$PANE_TARGET" ]]; then
+    echo "Usage: sane-detect-ssh PANE_TARGET [--update-context] [--label LABEL]" >&2
+    echo "Example: sane-detect-ssh 'tues:0.0' --update-context" >&2
+    exit 1
+fi
+
+# Validate pane target format (SESSION[:WINDOW.PANE] or SESSION:WINDOW or SESSION)
+SESSION=$(echo "$PANE_TARGET" | cut -d: -f1)
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "{\"error\": \"Session '$SESSION' does not exist\"}" >&2
+    exit 1
+fi
+
+# Normalize pane target if needed
+if [[ "$PANE_TARGET" == *":"* ]]; then
+    PANE_SPEC=$(echo "$PANE_TARGET" | cut -d: -f2)
+    if ! echo "$PANE_SPEC" | grep -E '^[0-9]+(\.[0-9]+)?$' > /dev/null; then
+        echo "{\"error\": \"Invalid pane specification '$PANE_SPEC'. Use format WINDOW or WINDOW.PANE\"}" >&2
+        exit 1
+    fi
+    if ! tmux list-panes -t "$PANE_TARGET" > /dev/null 2>&1; then
+        echo "{\"error\": \"Pane '$PANE_TARGET' does not exist\"}" >&2
+        exit 1
+    fi
+    TARGET="$PANE_TARGET"
+else
+    TARGET="$SESSION"
+fi
+
+# Record start time
+START_TIME=$(date +%s%N)
+
+# Use unique marker for reliable output extraction
+MARKER="SANE_SSH_$$_$(date +%s)"
+
+# Send detection commands
+tmux send-keys -t "$TARGET" "echo '${MARKER}_START'" Enter
+sleep 0.2
+tmux send-keys -t "$TARGET" "ps -o pid,comm -p \$\$ | head -1; ps -o pid,comm -p \$\$ | tail -1" Enter
+sleep 0.2
+tmux send-keys -t "$TARGET" "echo \"SSH_PARENT:\$(ps -o ppid= -p \$\$)\"" Enter
+sleep 0.2
+tmux send-keys -t "$TARGET" "ps -p \$(ps -o ppid= -p \$\$) -o comm=" Enter
+sleep 0.2
+tmux send-keys -t "$TARGET" "echo '${MARKER}_END'" Enter
+sleep 0.3
+
+# Capture pane output
+FULL_OUTPUT=$(tmux capture-pane -t "$TARGET" -p)
+
+# Extract output between markers
+OUTPUT=$(echo "$FULL_OUTPUT" | sed -n "/${MARKER}_START/,/${MARKER}_END/p" | grep -v "${MARKER}" | grep -v '\$' || true)
+
+# Check if SSH is in process tree
+SSH_DETECTED=false
+if echo "$OUTPUT" | grep -q "ssh" 2>/dev/null; then
+    SSH_DETECTED=true
+fi
+
+# Get current platform and user info
+PLATFORM_JSON=$(./sane-detect-platform "$TARGET" 2>/dev/null || echo "{}")
+HOSTNAME=$(echo "$PLATFORM_JSON" | jq -r '.hostname // "unknown"')
+OS=$(echo "$PLATFORM_JSON" | jq -r '.os // "unknown"')
+USER=$(echo "$PLATFORM_JSON" | jq -r '.user // "unknown"')
+
+# Get pane label if it exists
+CONTEXT_HOME="${TMUX_SANE_CONTEXT_HOME:-.tmux-sane}"
+CONTEXTS_FILE="$CONTEXT_HOME/contexts.json"
+EXISTING_LABEL=""
+if [[ -f "$CONTEXTS_FILE" ]]; then
+    EXISTING_LABEL=$(jq -r ".\"$TARGET\".label // \"\"" "$CONTEXTS_FILE" 2>/dev/null || true)
+fi
+
+# Determine final label (priority: provided label > existing label > auto-detected)
+FINAL_LABEL="$LABEL_NAME"
+if [[ -z "$FINAL_LABEL" ]] && [[ -n "$EXISTING_LABEL" ]]; then
+    FINAL_LABEL="$EXISTING_LABEL"
+fi
+if [[ -z "$FINAL_LABEL" ]]; then
+    if [[ "$SSH_DETECTED" == "true" ]]; then
+        FINAL_LABEL="ssh-to-$HOSTNAME"
+    else
+        FINAL_LABEL="local-$HOSTNAME"
+    fi
+fi
+
+# Calculate duration
+END_TIME=$(date +%s%N)
+DURATION_MS=$(( (END_TIME - START_TIME) / 1000000 ))
+
+# Determine SSH port (default 22, try to extract from process tree if available)
+SSH_PORT="22"
+if echo "$OUTPUT" | grep -q "\-p" 2>/dev/null; then
+    SSH_PORT=$(echo "$OUTPUT" | grep -oE '\-p\s+[0-9]+' | awk '{print $2}' | head -1 || echo "22")
+fi
+
+# Build JSON response
+JSON="{\"pane\": \"$TARGET\", \"ssh_detected\": $SSH_DETECTED, \"hostname\": \"$HOSTNAME\", \"user\": \"$USER\", \"os\": \"$OS\", \"port\": $SSH_PORT, \"label\": \"$FINAL_LABEL\", \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"duration_ms\": $DURATION_MS"
+
+# Add context_updated field if requested
+if [[ "$UPDATE_CONTEXT" == "true" ]]; then
+    # Update context database
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    CONTEXT_DB_SCRIPT="$SCRIPT_DIR/sane-context-database"
+    
+    if [[ -f "$CONTEXT_DB_SCRIPT" ]]; then
+        # Create or update context
+        mkdir -p "$CONTEXT_HOME"
+        if [[ ! -f "$CONTEXTS_FILE" ]]; then
+            echo "{}" > "$CONTEXTS_FILE"
+        fi
+        
+        # Build context metadata
+        CONTEXT_DATA="{\"ssh_detected\": $SSH_DETECTED, \"hostname\": \"$HOSTNAME\", \"os\": \"$OS\", \"user\": \"$USER\", \"port\": $SSH_PORT, \"label\": \"$FINAL_LABEL\", \"last_check\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+        
+        # Update context using jq
+        if command -v jq &> /dev/null; then
+            TEMP_CONTEXTS=$(mktemp)
+            jq ".\"$TARGET\" = $CONTEXT_DATA" "$CONTEXTS_FILE" > "$TEMP_CONTEXTS" 2>/dev/null || true
+            if [[ -s "$TEMP_CONTEXTS" ]]; then
+                mv "$TEMP_CONTEXTS" "$CONTEXTS_FILE"
+                JSON="$JSON, \"context_updated\": true"
+            else
+                rm -f "$TEMP_CONTEXTS"
+                JSON="$JSON, \"context_updated\": false"
+            fi
+        else
+            JSON="$JSON, \"context_updated\": false"
+        fi
+    else
+        JSON="$JSON, \"context_updated\": false"
+    fi
+else
+    JSON="$JSON, \"context_updated\": false"
+fi
+
+# Close JSON
+JSON="$JSON}"
+
+echo "$JSON"
