@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+# sane-context-database - Manage pane context metadata
+# Usage: sane-context-database <command> [pane_target] [options]
+# Commands:
+#   create PANE [--platform PLATFORM] [--mode MODE] [--current_dir DIR] [--label LABEL]
+#   read PANE
+#   update PANE [--platform PLATFORM] [--mode MODE] [--current_dir DIR] [--label LABEL]
+#   delete PANE
+#   list
+
+set -euo pipefail
+
+CONTEXT_HOME="${TMUX_SANE_CONTEXT_HOME:-.tmux-sane}"
+CONTEXTS_FILE="$CONTEXT_HOME/contexts.json"
+
+# Initialize context directory if needed
+mkdir -p "$CONTEXT_HOME"
+
+# Helper: escape JSON string
+escape_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"  # Escape backslashes
+    s="${s//\"/\\\"}"  # Escape quotes
+    s="${s//$'\n'/\\n}"  # Escape newlines
+    s="${s//$'\r'/\\r}"  # Escape carriage returns
+    s="${s//$'\t'/\\t}"  # Escape tabs
+    echo "$s"
+}
+
+# Helper: unescape JSON string
+unescape_json() {
+    local s="$1"
+    s="${s//\\\"/\"}"    # Unescape quotes
+    s="${s//\\\\/\\}"    # Unescape backslashes
+    echo "$s"
+}
+
+# Helper: ensure contexts.json exists
+ensure_db() {
+    if [[ ! -f "$CONTEXTS_FILE" ]]; then
+        echo "{}" > "$CONTEXTS_FILE"
+    fi
+}
+
+# Helper: get timestamp
+get_timestamp() {
+    date +%s
+}
+
+# Helper: validate pane target format (SESSION:WINDOW.PANE)
+validate_pane_target() {
+    local target="$1"
+    if [[ ! "$target" =~ ^[^:]+:[0-9]+\.[0-9]+$ ]]; then
+        echo "Error: Invalid pane target format. Use SESSION:WINDOW.PANE (e.g., mysession:0.0)" >&2
+        return 1
+    fi
+    return 0
+}
+
+# Command: create
+cmd_create() {
+    local pane="$1"
+    shift
+    
+    validate_pane_target "$pane" || return 1
+    ensure_db
+    
+    local platform="" mode="" current_dir="" label=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --platform) platform="$2"; shift 2 ;;
+            --mode) mode="$2"; shift 2 ;;
+            --current_dir) current_dir="$2"; shift 2 ;;
+            --label) label="$2"; shift 2 ;;
+            *) echo "Unknown option: $1" >&2; return 1 ;;
+        esac
+    done
+    
+    # Check if context already exists
+    if jq -e ".\"$pane\"" "$CONTEXTS_FILE" > /dev/null 2>&1; then
+        echo "Error: Context for pane '$pane' already exists" >&2
+        return 1
+    fi
+    
+    # Build context object
+    local timestamp=$(get_timestamp)
+    local context=$(jq -n \
+        --arg pane "$pane" \
+        --arg platform "$platform" \
+        --arg mode "$mode" \
+        --arg dir "$current_dir" \
+        --arg label "$label" \
+        --arg created "$timestamp" \
+        --arg updated "$timestamp" \
+        '{
+            pane: $pane,
+            platform: $platform,
+            mode: $mode,
+            current_dir: $dir,
+            label: $label,
+            created_at: $created,
+            updated_at: $updated
+        }')
+    
+    # Add to database
+    jq --arg key "$pane" --argjson value "$context" '.[$key] = $value' "$CONTEXTS_FILE" > "$CONTEXTS_FILE.tmp" && mv "$CONTEXTS_FILE.tmp" "$CONTEXTS_FILE"
+    
+    echo "{\"status\": \"created\", \"pane\": \"$pane\"}"
+}
+
+# Command: read
+cmd_read() {
+    local pane="$1"
+    
+    validate_pane_target "$pane" || return 1
+    ensure_db
+    
+    # Check if key exists (jq -e will error if null or false, but we want to check specifically for existence)
+    if ! jq -e "has(\"$pane\")" "$CONTEXTS_FILE" 2>/dev/null | grep -q "true"; then
+        echo "Error: No context found for pane '$pane'" >&2
+        return 1
+    fi
+    
+    jq -r ".\"$pane\"" "$CONTEXTS_FILE"
+}
+
+# Command: update
+cmd_update() {
+    local pane="$1"
+    shift
+    
+    validate_pane_target "$pane" || return 1
+    ensure_db
+    
+    # Check if context exists
+    if ! jq -e ".\"$pane\"" "$CONTEXTS_FILE" > /dev/null 2>&1; then
+        echo "Error: No context found for pane '$pane'" >&2
+        return 1
+    fi
+    
+    # Get current context
+    local current=$(jq -e ".\"$pane\"" "$CONTEXTS_FILE")
+    
+    # Parse update options and rebuild the context
+    local timestamp=$(get_timestamp)
+    local updates=$(echo "$current" | jq --arg ts "$timestamp" '.updated_at = $ts')
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --platform) updates=$(echo "$updates" | jq --arg val "$2" '.platform = $val'); shift 2 ;;
+            --mode) updates=$(echo "$updates" | jq --arg val "$2" '.mode = $val'); shift 2 ;;
+            --current_dir) updates=$(echo "$updates" | jq --arg val "$2" '.current_dir = $val'); shift 2 ;;
+            --label) updates=$(echo "$updates" | jq --arg val "$2" '.label = $val'); shift 2 ;;
+            *) echo "Unknown option: $1" >&2; return 1 ;;
+        esac
+    done
+    
+    # Save updated context using proper JSON parsing
+    local db=$(cat "$CONTEXTS_FILE")
+    local updated_db=$(echo "$db" | jq --arg key "$pane" --slurpfile value <(echo "$updates") '.[$key] = $value[0]')
+    echo "$updated_db" > "$CONTEXTS_FILE"
+    
+    echo "{\"status\": \"updated\", \"pane\": \"$pane\"}"
+}
+
+# Command: delete
+cmd_delete() {
+    local pane="$1"
+    
+    validate_pane_target "$pane" || return 1
+    ensure_db
+    
+    if ! jq -e ".\"$pane\"" "$CONTEXTS_FILE" > /dev/null 2>&1; then
+        echo "Error: No context found for pane '$pane'" >&2
+        return 1
+    fi
+    
+    jq --arg key "$pane" 'del(.[$key])' "$CONTEXTS_FILE" > "$CONTEXTS_FILE.tmp" && mv "$CONTEXTS_FILE.tmp" "$CONTEXTS_FILE"
+    
+    echo "{\"status\": \"deleted\", \"pane\": \"$pane\"}"
+}
+
+# Command: list
+cmd_list() {
+    ensure_db
+    
+    # Return all contexts
+    local contexts=$(jq '{contexts: [.[] | {pane: .pane, platform: .platform, mode: .mode, label: .label}]}' "$CONTEXTS_FILE")
+    echo "$contexts"
+}
+
+# Main dispatch
+COMMAND="${1:-}"
+
+if [[ -z "$COMMAND" ]]; then
+    echo "Usage: sane-context-database <command> [args...]" >&2
+    echo "Commands:" >&2
+    echo "  create PANE [--platform P] [--mode M] [--current_dir D] [--label L]" >&2
+    echo "  read PANE" >&2
+    echo "  update PANE [--platform P] [--mode M] [--current_dir D] [--label L]" >&2
+    echo "  delete PANE" >&2
+    echo "  list" >&2
+    exit 1
+fi
+
+case "$COMMAND" in
+    create) cmd_create "${@:2}" ;;
+    read) cmd_read "${@:2}" ;;
+    update) cmd_update "${@:2}" ;;
+    delete) cmd_delete "${@:2}" ;;
+    list) cmd_list ;;
+    *) echo "Unknown command: $COMMAND" >&2; exit 1 ;;
+esac
