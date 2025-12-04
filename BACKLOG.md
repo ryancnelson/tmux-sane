@@ -92,6 +92,107 @@ Prioritized improvements for the tmux-sane project.
 - [ ] **Raw mode for non-bash environments**
   - Juniper routers, SQL REPLs, etc.
 
+## Testing Scenarios (Edge Cases & Stress Tests)
+
+**Purpose:** Test the robustness of tmux-sane in real-world edge cases.
+
+### When to Run These Tests
+- **Strategic review time** (every 8 iterations)
+- **Before releasing a major version**
+- **When you want to find bugs proactively**
+- **To demonstrate capability to stakeholders**
+
+### Test 1: Multi-Host SSH Session
+- [ ] **Test platform detection across SSH boundaries**
+  - Setup: tues session, SSH from macOS to Linux host (hp2)
+  - Expected: sane-detect-platform correctly detects remote platform
+  - Expected: Context database tracks both local and remote panes
+  - Value: Proves cross-platform awareness works
+
+### Test 2: Non-Bash REPL (Perl/Python/Node)
+- [ ] **Test behavior in interactive REPLs**
+  - Setup: Launch `perl -de1` or `python` or `node` in a pane
+  - Expected: sane-detect-platform handles gracefully (or fails gracefully)
+  - Expected: Agent doesn't try to use bash primitives
+  - Challenge: No structured prompt, different input handling
+  - Value: Identifies need for "raw mode" or REPL detection
+
+### Test 3: Network Device (Router/Switch)
+- [ ] **Test with Juniper/Cisco/OPNsense CLI**
+  - Setup: SSH to router, enter config mode
+  - Expected: Detection works, but bash commands fail gracefully
+  - Expected: System knows it's in "raw mode" 
+  - Challenge: Different command syntax, no bash
+  - Value: Real-world network automation use case
+
+### Test 4: Nested tmux Sessions
+- [ ] **Test tmux-inside-tmux**
+  - Setup: Attach to remote tmux session from within local tmux
+  - Expected: Commands target correct tmux server
+  - Challenge: Key binding conflicts, which tmux to control
+  - Value: Common DevOps workflow
+
+### Test 5: Hung/Frozen Commands
+- [ ] **Test recovery from unresponsive commands**
+  - Setup: Run `cat` (waits for stdin), or `sleep 9999`
+  - Expected: Timeout detection works
+  - Expected: Ctrl-C recovery mechanism works
+  - Value: Agents don't get stuck forever
+
+### Test 6: Large Output (Scrollback Overflow)
+- [ ] **Test with commands producing 10000+ lines**
+  - Setup: Run `find / 2>/dev/null` or similar
+  - Expected: Capture mechanism doesn't miss data
+  - Expected: Performance remains acceptable
+  - Value: Real-world log analysis scenarios
+
+### Test 7: Special Characters & Escape Hell
+- [ ] **Test file creation with nasty content**
+  - Setup: Create file with quotes, backticks, $vars, newlines
+  - Expected: Base64 encoding handles it correctly
+  - Expected: User can see decoded output via tee
+  - Value: Proves escape handling is solid
+
+### Test 8: Rapid Context Switching
+- [ ] **Test agent working across 5+ panes simultaneously**
+  - Setup: 5 panes, different hosts/languages/tasks
+  - Expected: Context database keeps them separate
+  - Expected: No cross-contamination of commands
+  - Value: Real pair-programming scenario
+
+### Test 9: Permission Denied / Sudo Required
+- [ ] **Test graceful handling of auth failures**
+  - Setup: Try to write to /etc/ without sudo
+  - Expected: Clear error message
+  - Expected: Agent understands and adapts (adds sudo)
+  - Value: Common friction point
+
+### Test 10: Connection Loss / Pane Death
+- [ ] **Test recovery when SSH disconnects**
+  - Setup: Kill SSH connection mid-operation
+  - Expected: Health check detects dead pane
+  - Expected: Context marked as stale
+  - Expected: User gets clear notification
+  - Value: Production reliability
+
+### Stress Test: Autonomous Multi-Day Run
+- [ ] **Launch agent, let it work for 24+ hours**
+  - Setup: Fresh agent, full backlog, no supervision
+  - Track: How many iterations completed
+  - Track: Friction log entries
+  - Track: Number of test failures
+  - Track: Git commit quality
+  - Value: Ultimate test of self-sufficiency
+
+### Recording Results
+After running tests, update this section:
+
+**Last Test Run:** [DATE]  
+**Tests Passed:** X/10  
+**Tests Failed:** Y/10  
+**Issues Found:** [List new backlog items created from failures]  
+**Insights:** [What did we learn?]
+
 ## Ideas Inbox (Unsorted)
 
 - Mouse mode helpers
