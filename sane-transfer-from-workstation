@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# sane-transfer-from-workstation - Transfer a file from local workstation to a tmux pane using wormhole
+# Usage: sane-transfer-from-workstation SESSION[:WINDOW.PANE] WORMHOLE_CODE [remote_path]
+# Examples:
+#   sane-transfer-from-workstation tues:0.0 "1-alpha-bravo"
+#   sane-transfer-from-workstation tues:0.1 "1-alpha-bravo" "/tmp/received-file.tar.gz"
+#
+# Returns JSON: {status, remote_path, size, checksum}
+# Example output:
+#   {"status":"received","remote_path":"/tmp/wormhole-file","size":1024,"checksum":"abc123..."}
+#
+# Implementation notes:
+# - Uses `wormhole receive` to pull file from local to remote pane
+# - If remote_path not specified, uses default /tmp location
+# - Validates wormhole code format
+# - Calculates checksum (md5) for verification
+# - Handles platform differences (macOS vs Linux)
+
+set -euo pipefail
+
+TARGET="${1:-}"
+WORMHOLE_CODE="${2:-}"
+REMOTE_PATH="${3:-}"
+
+if [[ -z "$TARGET" ]] || [[ -z "$WORMHOLE_CODE" ]]; then
+    echo "Usage: sane-transfer-from-workstation SESSION[:WINDOW.PANE] WORMHOLE_CODE [remote_path]" >&2
+    echo "Example: sane-transfer-from-workstation tues:0.0 1-alpha-bravo" >&2
+    exit 1
+fi
+
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Extract session name from target for validation
+SESSION=$(echo "$TARGET" | cut -d: -f1)
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "Error: Session '$SESSION' does not exist" >&2
+    exit 1
+fi
+
+# Validate pane target if specified (SESSION:WINDOW.PANE format)
+if [[ "$TARGET" == *":"* ]]; then
+    PANE_SPEC=$(echo "$TARGET" | cut -d: -f2)
+    # Validate format: should be WINDOW.PANE or WINDOW
+    if ! echo "$PANE_SPEC" | grep -E '^[0-9]+(\.[0-9]+)?$' > /dev/null; then
+        echo "Error: Invalid pane specification '$PANE_SPEC'. Use format WINDOW or WINDOW.PANE" >&2
+        exit 1
+    fi
+fi
+
+# Validate wormhole code format (should be like "1-word-word" or similar)
+if ! echo "$WORMHOLE_CODE" | grep -E '^[0-9]+-[a-zA-Z]+-[a-zA-Z]+' > /dev/null; then
+    echo "Error: Invalid wormhole code format. Expected format like '1-alpha-bravo'" >&2
+    exit 1
+fi
+
+# Check if wormhole is installed locally
+if ! command -v wormhole >/dev/null 2>&1; then
+    echo "Error: wormhole command not found. Please install wormhole." >&2
+    exit 1
+fi
+
+# Source the run-command script for executing commands on remote pane
+if [[ ! -f "$PROJECT_DIR/sane-run-command" ]]; then
+    echo "Error: sane-run-command not found at $PROJECT_DIR/sane-run-command" >&2
+    exit 1
+fi
+
+# If no remote path specified, use a default in /tmp
+if [[ -z "$REMOTE_PATH" ]]; then
+    REMOTE_PATH="/tmp/wormhole-received-$(date +%s)"
+fi
+
+# Step 1: Build the wormhole receive command for the remote pane
+WORMHOLE_CMD="wormhole receive --text-only --code '$WORMHOLE_CODE' '$REMOTE_PATH' < /dev/null"
+
+# Execute wormhole receive on remote pane
+WORMHOLE_RESULT=$("$PROJECT_DIR/sane-run-command" "$TARGET" "$WORMHOLE_CMD" 2>&1) || true
+
+# Step 2: Verify file was received
+VERIFY_CMD="[[ -f '$REMOTE_PATH' ]] && echo 'received' || echo 'failed'"
+VERIFY_RESULT=$("$PROJECT_DIR/sane-run-command" "$TARGET" "$VERIFY_CMD" 2>&1)
+
+VERIFY_OUTPUT=$(echo "$VERIFY_RESULT" | jq -r '.output // empty' 2>/dev/null | tr -d '\n ' || echo "")
+
+if [[ "$VERIFY_OUTPUT" != "received" ]]; then
+    jq -n --arg status "error" --arg message "File transfer failed or file not found at remote path" \
+        '{status: $status, error: $message}'
+    exit 1
+fi
+
+# Step 3: Get file size and checksum from remote
+SIZE_CMD="stat -f %z '$REMOTE_PATH' 2>/dev/null || stat -c %s '$REMOTE_PATH' 2>/dev/null || echo 'unknown'"
+SIZE_RESULT=$("$PROJECT_DIR/sane-run-command" "$TARGET" "$SIZE_CMD" 2>&1)
+SIZE=$(echo "$SIZE_RESULT" | jq -r '.output // empty' 2>/dev/null | tr -d '\n ' || echo "0")
+
+CHECKSUM_CMD="md5sum '$REMOTE_PATH' | awk '{print \$1}' || md5 -q '$REMOTE_PATH'"
+CHECKSUM_RESULT=$("$PROJECT_DIR/sane-run-command" "$TARGET" "$CHECKSUM_CMD" 2>&1)
+CHECKSUM=$(echo "$CHECKSUM_RESULT" | jq -r '.output // empty' 2>/dev/null | tr -d '\n ' || echo "unknown")
+
+# Return structured output as JSON
+jq -n \
+    --arg status "received" \
+    --arg remote_path "$REMOTE_PATH" \
+    --arg size "$SIZE" \
+    --arg checksum "$CHECKSUM" \
+    '{status: $status, remote_path: $remote_path, size: ($size | tonumber), checksum: $checksum}'
+
+exit 0
