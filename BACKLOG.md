@@ -63,12 +63,13 @@ Prioritized improvements for the tmux-sane project.
    - Value: Production readiness ✓
    - Result: Created tests/test-performance.sh with comprehensive benchmarks. Identified one bottleneck: medium file creation with base64 encoding (1377ms). Most operations <700ms. 3 tests timeout due to marker detection in large buffers (fixable in Iteration 20)
 
-- [ ] **Error Recovery Mechanisms** (Iteration 20)
-  - Scope: 45 min
-  - Add timeout handling for hung commands
-  - Add graceful degradation for missing tools
-  - Add retry logic for transient failures
-  - Value: Reliability in real-world scenarios
+- [x] **Error Recovery Mechanisms** (Iteration 20)
+   - Scope: 45 min ✓
+   - Add timeout handling for hung commands ✓ (already existed)
+   - Add graceful degradation for missing tools ✓ (already existed)
+   - Add retry logic for transient failures ✓ (implemented with exponential backoff)
+   - Value: Reliability in real-world scenarios ✓
+   - Result: Enhanced sane-run-command with retry parameter, created lib/retry-logic.sh helpers, 22 comprehensive tests all passing
 
 ## Priority 3: Documentation & Release
 
@@ -381,12 +382,24 @@ After running tests, update this section:
              - Proved multi-server orchestration pattern works reliably
              - Foundation ready for priority 2 performance and reliability work
 
-     - [x] **Performance Profiling** (Iteration 19)
-             - Created comprehensive test suite (tests/test-performance.sh)
-             - Profiled sane-run-command with small, medium, and large outputs
-             - Profiled sane-create-file with various file sizes and content types
-             - Identified bottleneck: base64-encoded file creation (1377ms for 13KB)
-             - Documented all performance characteristics in PERFORMANCE-REPORT.md
-             - Most operations perform well (<700ms for typical use cases)
-             - 9/12 tests passing (3 timeout tests fixable with marker detection improvement)
-             - Established baseline performance metrics for future optimization
+      - [x] **Performance Profiling** (Iteration 19)
+              - Created comprehensive test suite (tests/test-performance.sh)
+              - Profiled sane-run-command with small, medium, and large outputs
+              - Profiled sane-create-file with various file sizes and content types
+              - Identified bottleneck: base64-encoded file creation (1377ms for 13KB)
+              - Documented all performance characteristics in PERFORMANCE-REPORT.md
+              - Most operations perform well (<700ms for typical use cases)
+              - 9/12 tests passing (3 timeout tests fixable with marker detection improvement)
+              - Established baseline performance metrics for future optimization
+
+      - [x] **Error Recovery Mechanisms** (Iteration 20)
+              - Created lib/retry-logic.sh helper functions for future use
+              - Enhanced sane-run-command with max_retries parameter and exponential backoff
+              - Timeout handling for hung commands (already existed, verified working)
+              - Graceful degradation for missing tools (already existed, verified working)
+              - Retry logic for transient failures (new: retries on exit codes 124, 255, 28)
+              - Added attempts and retried fields to JSON response for tracking
+              - Created comprehensive test suite (tests/test-error-recovery.sh)
+              - Full test coverage (22/22 tests passing)
+              - Verified backward compatibility - existing scripts unaffected
+              - Production-ready error recovery mechanism
