@@ -25,7 +25,7 @@ NC='\033[0m' # No Color
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-echo -e "${BLUE}=== SignOz Query Tool - New Iteration Setup ===${NC}\n"
+echo -e "${BLUE}=== tmux-sane - New Iteration Setup ===${NC}\n"
 
 # 1. Check if we're in a clean git state
 if ! git diff-index --quiet HEAD --; then
@@ -61,7 +61,8 @@ fi
 echo -e "${BLUE}=== Priority 1 Items from BACKLOG.md ===${NC}\n"
 if [ -f "BACKLOG.md" ]; then
     # Extract Priority 1 section (everything between "## Priority 1" and next "##")
-    sed -n '/## Priority 1:/,/## Priority 2:/p' BACKLOG.md | head -n -1 | grep '^\- \[ \]' | head -5
+    # Use sed to exclude the last line instead of head -n -1 (BSD head doesn't support negative)
+    sed -n '/## Priority 1:/,/## Priority 2:/p' BACKLOG.md | sed '$d' | grep '^\- \[ \]' | head -5
     echo ""
     echo -e "${BLUE}See BACKLOG.md for full list and details${NC}"
 else
@@ -104,10 +105,10 @@ echo ""
 echo -e "${GREEN}✓ Setup complete!${NC}\n"
 echo -e "${BLUE}=== Next Steps ===${NC}"
 echo "1. Read the task description from BACKLOG.md"
-echo "2. Activate environment: source test_env/bin/activate"
-echo "3. Run tests to confirm baseline: python -m pytest lib/test_signozctl.py -v"
-echo "4. Implement the feature/improvement"
-echo "5. Run tests again to verify: python -m pytest lib/test_signozctl.py -v"
+echo "2. Write tests first (in tests/)"
+echo "3. Run tests to see them fail: ./tests/test-*.sh"
+echo "4. Implement the feature"
+echo "5. Run tests again to verify: ./tests/test-*.sh"
 echo "6. Commit your changes: git commit -m 'feat: description'"
 echo "7. Merge to main: git checkout main && git merge $BRANCH_NAME"
 echo ""
@@ -115,21 +116,19 @@ echo -e "${BLUE}Branch:${NC} $BRANCH_NAME"
 echo -e "${BLUE}Iteration:${NC} $NEXT_ITERATION"
 echo ""
 
-# 9. Optional: Show testing commands reminder
+# 9. Show testing commands reminder
 echo -e "${YELLOW}Reminder - Testing commands:${NC}"
-echo "  python -m pytest lib/test_signozctl.py -v           # Run all tests"
-echo "  python lib/cli.py --help                             # Test CLI"
-echo "  python lib/cli.py list-metrics | head -10           # Quick smoke test"
+echo "  ./tests/test-*.sh                                    # Run all tests"
+echo "  bash -n sane-command                                 # Validate syntax"
+echo "  sane-validate-bash 'echo hello'                      # Test validation"
 echo ""
 
-# 10. Optional: Check if test environment exists
-if [ ! -d "test_env" ]; then
-    echo -e "${YELLOW}Note: test_env not found. You may need to create it:${NC}"
-    echo "  python3 -m venv test_env"
-    echo "  source test_env/bin/activate"
-    echo "  pip install -r requirements.txt"
-    echo ""
-fi
+# 10. Reminder about test-driven development
+echo -e "${YELLOW}Remember: Write tests FIRST!${NC}"
+echo "  - Tests define the contract"
+echo "  - Red → Green → Refactor"
+echo "  - All tests must pass before commit"
+echo ""
 
-# 11. Optional: Open key files in editor
+# 11. Ready to go
 echo -e "${BLUE}Ready to start iteration $NEXT_ITERATION!${NC}"

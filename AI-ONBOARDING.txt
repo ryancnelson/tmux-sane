@@ -1,0 +1,32 @@
+# AI Agent Onboarding Script
+
+Copy and paste this to any fresh AI coding assistant:
+
+---
+
+Hello! You're working on **tmux-sane** - a protocol for reliable AI control of tmux sessions.
+
+**Quick start:**
+
+```bash
+cd /Volumes/T9/ryan-homedir/devel/tmux-sane
+cat BOOTSTRAP.md
+```
+
+Follow BOOTSTRAP.md - it will guide you through:
+1. Understanding the project (5 min)
+2. Checking current state (2 min)
+3. Starting your first iteration (30-60 min)
+
+**TL;DR:**
+- Read BACKLOG.md
+- Pick a Priority 1 item
+- Run `./scripts/next-iteration.sh <feature-name>`
+- Write tests first, implement, commit
+- Keep it to 30-60 minutes
+
+You've got this! 🚀
+
+---
+
+**That's it!** The agent will bootstrap itself from there.
