@@ -4,96 +4,104 @@ Prioritized improvements for the tmux-sane project.
 
 ## Priority 1: Ready to Implement (30-60 min each)
 
-### Core Infrastructure
-- [x] **Fix sane-detect-platform to support pane targeting** (Iteration 1)
+### Edge Case Testing Phase
+- [ ] **Test 1: Multi-Host SSH Session** (Iteration 13)
   - Scope: 45 min
-  - Update to accept SESSION:WINDOW.PANE format
-  - Add tests for pane targeting
-  - Value: Foundation for all other pane-aware commands
+  - Setup: tues session, SSH from macOS to Linux host (hp2)
+  - Verify: sane-detect-platform correctly detects remote platform
+  - Verify: Context database tracks both local and remote panes
+  - Value: Proves cross-platform awareness works in real scenario
 
-- [x] **Create sane-list-panes command** (Iteration 2)
-   - Scope: 45 min
-   - List all panes in a session with basic info (pane ID, current command, path)
-   - Returns JSON format
-   - Add tests
-   - Value: Visibility into session structure
+- [ ] **Test 2: Non-Bash REPL (Python/Node/Perl)** (Iteration 14)
+  - Scope: 45 min
+  - Setup: Launch Python, Node.js, or Perl REPL in a pane
+  - Expected: sane-detect-platform handles gracefully
+  - Expected: System identifies non-bash environment
+  - Value: Identifies edge case handling needs
 
-- [x] **Create context database (~/.tmux-sane/contexts.json)** (Iteration 3)
+- [ ] **Test 3: Network Device CLI** (Iteration 15)
+  - Scope: 45 min
+  - Setup: SSH to router or network device (or mock)
+  - Expected: Detection works, bash commands fail gracefully
+  - Expected: System knows it's in "raw mode"
+  - Value: Real-world network automation scenario
+
+- [ ] **Test 4: Nested tmux Sessions** (Iteration 16)
+  - Scope: 45 min
+  - Setup: Attach to remote tmux from within local tmux
+  - Expected: Commands target correct tmux server
+  - Value: Common DevOps workflow
+
+### Sample Agent Workflows
+- [ ] **Simple Automation: Multi-file Project Creation** (Iteration 17)
+  - Scope: 45 min
+  - Create 5 files with different content types (bash, JSON, markdown)
+  - Use sane-* primitives to build a small project structure
+  - Document the workflow
+  - Value: Shows practical agent usage
+
+- [ ] **Complex Workflow: Deploy to Multiple Servers** (Iteration 18)
   - Scope: 60 min
-  - Basic CRUD operations for pane contexts
-  - Store: platform, mode, current_dir, label, created_at, updated_at
-  - Add tests (7/7 passing)
-  - Value: Enables pane context tracking
+  - Use 3 panes (local, server1, server2)
+  - Deploy app, verify health checks
+  - Document coordination across panes
+  - Value: Multi-pane agent coordination example
 
-### Validation System
-- [x] **Create sane-validate-bash command** (Iteration 4)
-  - Scope: 30 min
-  - Use `bash -n` to validate syntax
-  - Returns JSON: {valid: true/false, error: "..."}
-  - Add tests (11/11 tests passing)
-  - Value: Prevent syntax errors before sending to tmux
+## Priority 2: Performance & Reliability (Next)
 
-- [x] **Create sane-validate-json command** (Iteration 5)
-   - Scope: 30 min
-   - Use `jq empty` to validate JSON
-   - Returns JSON: {valid: true/false, error: "..."}
-   - Add tests (15/15 tests passing)
-   - Value: Catch JSON errors early
-
-### Prompt Management
-- [x] **Create sane-setup-prompt command** (Iteration 6)
+- [ ] **Performance Profiling** (Iteration 19)
   - Scope: 45 min
-  - Sets structured PS1 in target pane: `user@host - timestamp seq:N rslt:N bash $`
-  - Detects current shell (bash/zsh)
-  - Add tests (10/10 tests passing)
-  - Value: Enables reliable state detection
+  - Profile sane-run-command and sane-create-file on large outputs
+  - Identify any bottlenecks >1s
+  - Document performance characteristics
+  - Value: Production readiness
 
-## Priority 2: Important but Need Breakdown
+- [ ] **Error Recovery Mechanisms** (Iteration 20)
+  - Scope: 45 min
+  - Add timeout handling for hung commands
+  - Add graceful degradation for missing tools
+  - Add retry logic for transient failures
+  - Value: Reliability in real-world scenarios
 
-- [x] **Implement sane-run-command** (Iteration 7)
-   - Full implementation with tmux capture-pane integration
-   - Works with remote SSH panes, local panes
-   - Returns JSON with output, exit_code, duration_ms
-   - All 16 tests passing
+## Priority 3: Documentation & Release
 
-- [x] **Implement sane-create-file** (Iteration 8)
-    - With base64 encoding, backup mechanism
-    - Depends on: run-command
-    - Full test coverage (16/16 tests passing)
+- [ ] **Getting Started Guide** (Iteration 21+)
+  - Write beginner-friendly walkthrough
+  - Include 3 practical examples
+  - Add troubleshooting section
 
-- [x] **Pane labeling system** (Iteration 9)
-   - sane-label-pane: Label panes in context database, auto-creates context if needed
-   - sane-get-label: Retrieve labels for panes, handles missing labels gracefully
-   - Updated sane-list-panes to show labels from context database
-   - Storage in context database fully integrated
-   - Full test coverage (15/15 tests passing)
+- [ ] **Agent Best Practices Document** (Iteration 22+)
+  - Document patterns from sample workflows
+  - Show do's and don'ts
+  - Include performance tips
 
-## Priority 3: Nice to Have
-
-- [x] **Friction logging system** (Iteration 11)
-  - sane-log-operation: Log operations with timestamp, event type, command, platform, validation, exit code, duration
-  - sane-friction-analysis: Analyze logs for patterns, failure modes, platform stats, performance metrics
-  - Full test coverage (16/16 tests passing)
-  - Enables feedback loop for continuous improvement
-
-- [x] **Wormhole file transfer integration** (Iteration 12)
-   - sane-transfer-to-workstation: Transfer files from remote panes to local workstation
-   - sane-transfer-from-workstation: Transfer files from local workstation to remote panes
-   - Full test coverage (15/15 tests passing)
-   - Enables reliable file transfers across panes using wormhole protocol
+- [ ] **Version 0.1 Release** (Iteration 23+)
+  - Create git tag v0.1
+  - Write release notes
+  - Create simple README for distribution
 
 ## Priority 4: Research / Future
 
 - [ ] **Integration with ask-* scripts**
-  - Use ask-nova-lite for cheap validation
-  - Use ask-claude-haiku for screen reading
+   - Use ask-nova-lite for cheap validation
+   - Use ask-claude-haiku for screen reading
+   - Value: Cheaper, faster validation layer
 
 - [ ] **SSH detection and tracking**
-  - Detect when pane SSH's to remote host
-  - Auto-refresh context
+   - Detect when pane SSH's to remote host
+   - Auto-refresh context database
+   - Value: Automatic context updates
 
 - [ ] **Raw mode for non-bash environments**
-  - Juniper routers, SQL REPLs, etc.
+   - Support Juniper routers, SQL REPLs, network CLIs
+   - Graceful degradation for non-bash shells
+   - Value: Expanded use cases
+
+- [ ] **Health check system**
+   - Periodic pane health monitoring
+   - Detect dead/frozen panes
+   - Auto-notify agents of issues
+   - Value: Production reliability
 
 ## Testing Scenarios (Edge Cases & Stress Tests)
 
@@ -291,9 +299,18 @@ After running tests, update this section:
        - Full test coverage (16/16 tests passing)
        - Enables data-driven improvements based on friction patterns
 
-- [x] **Implement wormhole file transfer integration** (Iteration 12)
-       - sane-transfer-to-workstation: Transfer files from remote panes to local workstation using wormhole
-       - sane-transfer-from-workstation: Transfer files from local workstation to remote panes using wormhole
-       - Validates file existence, calculates checksums, handles error conditions gracefully
-       - Full test coverage (15/15 tests passing)
-       - Enables reliable file transfers across panes and hosts using wormhole protocol
+ - [x] **Implement wormhole file transfer integration** (Iteration 12)
+        - sane-transfer-to-workstation: Transfer files from remote panes to local workstation using wormhole
+        - sane-transfer-from-workstation: Transfer files from local workstation to remote panes using wormhole
+        - Validates file existence, calculates checksums, handles error conditions gracefully
+        - Full test coverage (15/15 tests passing)
+        - Enables reliable file transfers across panes and hosts using wormhole protocol
+
+- [x] **Strategic Review #2** (Iteration 12, Checkpoint)
+        - All Priority 1-3 items completed (12 complete iterations)
+        - 142/142 tests passing across 14 test suites
+        - 15 production-grade sane-* commands implemented
+        - Clean git history with 25 commits
+        - Ready to enter "Proving Phase" with edge case testing
+        - Planning next 8 iterations (13-20) with clear theme
+        - See STRATEGIC-REVIEW-CHECKLIST.md for full review
