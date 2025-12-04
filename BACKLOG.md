@@ -116,10 +116,13 @@ Prioritized improvements for the tmux-sane project.
      - Value: Production reliability - detect dead/hung panes early ✓
      - Result: Enables agents to monitor pane health and recover gracefully
 
-- [ ] **Raw mode for non-bash environments**
-    - Support Juniper routers, SQL REPLs, network CLIs
-    - Graceful degradation for non-bash shells
-    - Value: Expanded use cases
+- [x] **Raw mode detection and support** (Iteration 26)
+     - Created sane-detect-mode command for mode detection ✓
+     - Detects bash vs raw (non-bash) environments ✓
+     - Returns capabilities based on mode ✓
+     - Full test coverage (12/12 tests passing) ✓
+     - Value: Enables agents to gracefully handle non-bash shells ✓
+     - Result: Agents can now detect and adapt to network CLIs, REPLs, etc.
 
 
 
