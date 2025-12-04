@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# sane-validate-bash - Validate bash script syntax
+# Usage: sane-validate-bash "bash code here"
+# Returns JSON: {valid: true/false, error: "error message if invalid"}
+#
+# Examples:
+#   sane-validate-bash "echo hello"
+#   sane-validate-bash "for i in {1..5}; do echo \$i; done"
+#   sane-validate-bash "invalid syntax here"
+
+set -euo pipefail
+
+SCRIPT_TO_VALIDATE="${1:-}"
+
+# Create a temporary file for validation
+TMPFILE=$(mktemp)
+trap "rm -f '$TMPFILE'" EXIT
+
+# Write the script to the temporary file
+echo "$SCRIPT_TO_VALIDATE" > "$TMPFILE"
+
+# Run bash syntax check
+ERROR_OUTPUT=$(bash -n "$TMPFILE" 2>&1) || {
+    EXIT_CODE=$?
+    # Script is invalid - construct JSON error response
+    # Escape special characters in error message for JSON
+    ERROR_JSON=$(echo "$ERROR_OUTPUT" | jq -Rs '.')
+    echo "{\"valid\":false,\"error\":$ERROR_JSON}"
+    exit 0
+}
+
+# Script is valid
+echo '{"valid":true}'

@@ -26,11 +26,11 @@ Prioritized improvements for the tmux-sane project.
   - Value: Enables pane context tracking
 
 ### Validation System
-- [ ] **Create sane-validate-bash command**
+- [x] **Create sane-validate-bash command** (Iteration 4)
   - Scope: 30 min
   - Use `bash -n` to validate syntax
   - Returns JSON: {valid: true/false, error: "..."}
-  - Add tests
+  - Add tests (11/11 tests passing)
   - Value: Prevent syntax errors before sending to tmux
 
 - [ ] **Create sane-validate-json command**
@@ -125,9 +125,16 @@ Prioritized improvements for the tmux-sane project.
     - Enables visibility into session structure for AI agents
 
 - [x] **Create context database (~/.tmux-sane/contexts.json)** (Iteration 3)
-    - Implemented sane-context-database command with full CRUD operations
-    - Stores pane metadata: platform, mode, current_dir, label, timestamps
-    - Uses ~/.tmux-sane/contexts.json for persistence
-    - Full test coverage (7/7 tests passing)
-    - Enables pane context tracking for future features
+     - Implemented sane-context-database command with full CRUD operations
+     - Stores pane metadata: platform, mode, current_dir, label, timestamps
+     - Uses ~/.tmux-sane/contexts.json for persistence
+     - Full test coverage (7/7 tests passing)
+     - Enables pane context tracking for future features
+
+- [x] **Create sane-validate-bash command** (Iteration 4)
+     - Implemented sane-validate-bash command for bash syntax validation
+     - Uses `bash -n` to check script syntax
+     - Returns structured JSON: {valid: true/false, error: "..."}
+     - Full test coverage (11/11 tests passing)
+     - Enables pre-flight validation before sending commands to tmux
   
