@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# sane-log-operation: Log operations to friction.jsonl for analysis
+#
+# Usage: sane-log-operation [options]
+#
+# Options:
+#   --log-file PATH          Log file to write to (default: ~/.tmux-sane/friction.jsonl)
+#   --event TYPE             Event type (run_command, create_file, etc.)
+#   --command CMD            Command that was executed
+#   --platform PLATFORM      Platform (darwin_arm64, linux_x86_64, etc.)
+#   --validation RESULT      Validation result (passed, failed)
+#   --reason REASON          Reason for failure (if validation=failed)
+#   --exit-code CODE         Exit code from command
+#   --duration-ms MS         Duration in milliseconds
+#
+# All fields are optional. Outputs JSON to log file (jsonl format).
+
+set -euo pipefail
+
+# Parse arguments
+LOG_FILE="${HOME}/.tmux-sane/friction.jsonl"
+EVENT=""
+COMMAND=""
+PLATFORM=""
+VALIDATION=""
+REASON=""
+EXIT_CODE=""
+DURATION_MS=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --log-file)
+            LOG_FILE="$2"
+            shift 2
+            ;;
+        --event)
+            EVENT="$2"
+            shift 2
+            ;;
+        --command)
+            COMMAND="$2"
+            shift 2
+            ;;
+        --platform)
+            PLATFORM="$2"
+            shift 2
+            ;;
+        --validation)
+            VALIDATION="$2"
+            shift 2
+            ;;
+        --reason)
+            REASON="$2"
+            shift 2
+            ;;
+        --exit-code)
+            EXIT_CODE="$2"
+            shift 2
+            ;;
+        --duration-ms)
+            DURATION_MS="$2"
+            shift 2
+            ;;
+        *)
+            echo "Error: Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Ensure log directory exists
+LOG_DIR=$(dirname "$LOG_FILE")
+mkdir -p "$LOG_DIR"
+
+# Build JSON object with provided fields
+JSON_FIELDS=()
+
+# Always include timestamp (ISO 8601 format)
+TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+JSON_FIELDS+=("\"timestamp\": \"$TIMESTAMP\"")
+
+# Add optional fields if provided
+if [[ -n "$EVENT" ]]; then
+    # Escape any quotes in the value
+    EVENT_ESCAPED="${EVENT//\"/\\\"}"
+    JSON_FIELDS+=("\"event\": \"$EVENT_ESCAPED\"")
+fi
+
+if [[ -n "$COMMAND" ]]; then
+    # Escape any quotes in the value
+    COMMAND_ESCAPED="${COMMAND//\"/\\\"}"
+    JSON_FIELDS+=("\"command\": \"$COMMAND_ESCAPED\"")
+fi
+
+if [[ -n "$PLATFORM" ]]; then
+    PLATFORM_ESCAPED="${PLATFORM//\"/\\\"}"
+    JSON_FIELDS+=("\"platform\": \"$PLATFORM_ESCAPED\"")
+fi
+
+if [[ -n "$VALIDATION" ]]; then
+    VALIDATION_ESCAPED="${VALIDATION//\"/\\\"}"
+    JSON_FIELDS+=("\"validation\": \"$VALIDATION_ESCAPED\"")
+fi
+
+if [[ -n "$REASON" ]]; then
+    REASON_ESCAPED="${REASON//\"/\\\"}"
+    JSON_FIELDS+=("\"reason\": \"$REASON_ESCAPED\"")
+fi
+
+if [[ -n "$EXIT_CODE" ]]; then
+    JSON_FIELDS+=("\"exit_code\": $EXIT_CODE")
+fi
+
+if [[ -n "$DURATION_MS" ]]; then
+    JSON_FIELDS+=("\"duration_ms\": $DURATION_MS")
+fi
+
+# Construct final JSON object
+JSON_LINE="{$(IFS=, ; echo "${JSON_FIELDS[*]}")}"
+
+# Write to log file (append mode, jsonl format - one JSON per line)
+echo "$JSON_LINE" >> "$LOG_FILE"
+
+# Output the JSON line for potential piping
+echo "$JSON_LINE"

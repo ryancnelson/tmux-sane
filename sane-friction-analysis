@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+# sane-friction-analysis: Analyze friction logs to identify patterns and issues
+#
+# Usage: sane-friction-analysis [options]
+#
+# Options:
+#   --log-file PATH          Log file to analyze (default: ~/.tmux-sane/friction.jsonl)
+#   --since TIME             Only analyze operations since TIME (ISO 8601)
+#   --event-type TYPE        Filter by event type (run_command, create_file, etc.)
+#
+# Outputs analysis as JSON with:
+#   - total_operations: Count of all logged operations
+#   - validation_stats: Pass/fail counts and percentages
+#   - event_distribution: Counts by event type
+#   - failure_patterns: Most common failure reasons
+#   - platform_stats: Statistics by platform
+#   - performance_stats: Timing information
+
+set -euo pipefail
+
+# Parse arguments
+LOG_FILE="${HOME}/.tmux-sane/friction.jsonl"
+SINCE=""
+EVENT_TYPE=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --log-file)
+            LOG_FILE="$2"
+            shift 2
+            ;;
+        --since)
+            SINCE="$2"
+            shift 2
+            ;;
+        --event-type)
+            EVENT_TYPE="$2"
+            shift 2
+            ;;
+        *)
+            echo "Error: Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Function to build jq filter
+build_filter() {
+    local filter="."
+    
+    if [[ -n "$SINCE" ]]; then
+        filter="$filter | select(.timestamp >= \"$SINCE\")"
+    fi
+    
+    if [[ -n "$EVENT_TYPE" ]]; then
+        filter="$filter | select(.event == \"$EVENT_TYPE\")"
+    fi
+    
+    echo "$filter"
+}
+
+FILTER=$(build_filter)
+
+# Check if log file exists
+if [[ ! -f "$LOG_FILE" ]]; then
+    # Return empty analysis
+    cat <<EOF
+{
+  "total_operations": 0,
+  "validation_stats": {
+    "passed": 0,
+    "failed": 0,
+    "unknown": 0,
+    "pass_rate_percent": 0
+  },
+  "event_distribution": {},
+  "failure_patterns": [],
+  "platform_stats": {},
+  "performance_stats": {
+    "avg_duration_ms": 0,
+    "min_duration_ms": null,
+    "max_duration_ms": null
+  }
+}
+EOF
+    exit 0
+fi
+
+# Read and analyze the log file
+# Using jq to build the analysis
+jq -s "
+  map(select($FILTER)) |
+  {
+    total_operations: length,
+    validation_stats: (
+      {
+        passed: (map(select(.validation == \"passed\")) | length),
+        failed: (map(select(.validation == \"failed\")) | length),
+        unknown: (map(select(.validation == null or (.validation != \"passed\" and .validation != \"failed\"))) | length)
+      } |
+      . as \$stats |
+      . + {
+        pass_rate_percent: (
+          if \$stats.passed + \$stats.failed > 0 then
+            (\$stats.passed * 100 / (\$stats.passed + \$stats.failed)) | floor
+          else
+            0
+          end
+        )
+      }
+    ),
+    event_distribution: (
+      group_by(.event) |
+      map({key: .[0].event, value: length}) |
+      from_entries
+    ),
+    failure_patterns: (
+      map(select(.validation == \"failed\" and .reason)) |
+      group_by(.reason) |
+      map({reason: .[0].reason, count: length}) |
+      sort_by(-.count) |
+      .[0:10]
+    ),
+    platform_stats: (
+      group_by(.platform) |
+      map(
+        {
+          platform: .[0].platform,
+          count: length,
+          failures: (map(select(.validation == \"failed\")) | length)
+        }
+      ) |
+      map({key: .platform, value: {count, failures}}) |
+      from_entries
+    ),
+    performance_stats: (
+      [.[] | select(.duration_ms != null) | .duration_ms] |
+      if length > 0 then
+        {
+          avg_duration_ms: (add / length | floor),
+          min_duration_ms: min,
+          max_duration_ms: max,
+          operations_counted: length
+        }
+      else
+        {
+          avg_duration_ms: 0,
+          min_duration_ms: null,
+          max_duration_ms: null,
+          operations_counted: 0
+        }
+      end
+    )
+  }
+" "$LOG_FILE" 2>/dev/null || cat <<EOF
+{
+  "total_operations": 0,
+  "validation_stats": {
+    "passed": 0,
+    "failed": 0,
+    "unknown": 0,
+    "pass_rate_percent": 0
+  },
+  "event_distribution": {},
+  "failure_patterns": [],
+  "platform_stats": {},
+  "performance_stats": {
+    "avg_duration_ms": 0,
+    "min_duration_ms": null,
+    "max_duration_ms": null
+  }
+}
+EOF
