@@ -33,12 +33,12 @@ Prioritized improvements for the tmux-sane project.
   - Add tests (11/11 tests passing)
   - Value: Prevent syntax errors before sending to tmux
 
-- [ ] **Create sane-validate-json command**
-  - Scope: 30 min
-  - Use `jq empty` to validate JSON
-  - Returns JSON format
-  - Add tests
-  - Value: Catch JSON errors early
+- [x] **Create sane-validate-json command** (Iteration 5)
+   - Scope: 30 min
+   - Use `jq empty` to validate JSON
+   - Returns JSON: {valid: true/false, error: "..."}
+   - Add tests (15/15 tests passing)
+   - Value: Catch JSON errors early
 
 ### Prompt Management
 - [ ] **Create sane-setup-prompt command**
@@ -233,9 +233,16 @@ After running tests, update this section:
      - Enables pane context tracking for future features
 
 - [x] **Create sane-validate-bash command** (Iteration 4)
-     - Implemented sane-validate-bash command for bash syntax validation
-     - Uses `bash -n` to check script syntax
-     - Returns structured JSON: {valid: true/false, error: "..."}
-     - Full test coverage (11/11 tests passing)
-     - Enables pre-flight validation before sending commands to tmux
-  
+      - Implemented sane-validate-bash command for bash syntax validation
+      - Uses `bash -n` to check script syntax
+      - Returns structured JSON: {valid: true/false, error: "..."}
+      - Full test coverage (11/11 tests passing)
+      - Enables pre-flight validation before sending commands to tmux
+
+- [x] **Create sane-validate-json command** (Iteration 5)
+      - Implemented sane-validate-json command for JSON syntax validation
+      - Uses `jq empty` to parse and validate JSON
+      - Returns structured JSON: {valid: true/false, error: "..."}
+      - Full test coverage (15/15 tests passing)
+      - Enables pre-flight validation for JSON payloads
+   

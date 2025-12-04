@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# sane-validate-json - Validate JSON syntax
+# Usage: sane-validate-json "json here"
+# Returns JSON: {valid: true/false, error: "error message if invalid"}
+#
+# Examples:
+#   sane-validate-json '{"key": "value"}'
+#   sane-validate-json '[1, 2, 3]'
+#   sane-validate-json 'invalid json'
+
+set -euo pipefail
+
+JSON_TO_VALIDATE="${1:-}"
+
+# Empty string is invalid JSON
+if [[ -z "$JSON_TO_VALIDATE" ]]; then
+    echo '{"valid":false,"error":"Unexpected end of JSON input"}'
+    exit 0
+fi
+
+# Use jq to validate JSON by parsing it
+ERROR_OUTPUT=$(echo "$JSON_TO_VALIDATE" | jq empty 2>&1) || {
+    EXIT_CODE=$?
+    # JSON is invalid - construct JSON error response
+    # Escape special characters in error message for JSON
+    ERROR_JSON=$(echo "$ERROR_OUTPUT" | jq -Rs '.')
+    echo "{\"valid\":false,\"error\":$ERROR_JSON}"
+    exit 0
+}
+
+# JSON is valid
+echo '{"valid":true}'
