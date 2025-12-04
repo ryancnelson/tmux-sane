@@ -70,9 +70,11 @@ Prioritized improvements for the tmux-sane project.
 
 ## Priority 3: Nice to Have
 
-- [ ] **Friction logging system**
-  - Log all operations with timing, retries, failures
-  - Analysis tools
+- [x] **Friction logging system** (Iteration 11)
+  - sane-log-operation: Log operations with timestamp, event type, command, platform, validation, exit code, duration
+  - sane-friction-analysis: Analyze logs for patterns, failure modes, platform stats, performance metrics
+  - Full test coverage (16/16 tests passing)
+  - Enables feedback loop for continuous improvement
 
 - [ ] **Wormhole file transfer integration**
   - sane-transfer-to-workstation
@@ -278,3 +280,11 @@ After running tests, update this section:
       - Supports explicit platform override for testing
       - Full test coverage (15/15 tests passing)
       - Enables reliable tool path resolution across macOS/Linux/FreeBSD
+
+- [x] **Implement friction logging system** (Iteration 11)
+      - sane-log-operation: Logs operations to ~/.tmux-sane/friction.jsonl
+      - sane-friction-analysis: Analyzes logs for patterns and statistics
+      - Tracks: timestamp, event type, command, platform, validation status, exit code, duration
+      - Analysis output: validation stats, event distribution, failure patterns, platform stats, performance metrics
+      - Full test coverage (16/16 tests passing)
+      - Enables data-driven improvements based on friction patterns
