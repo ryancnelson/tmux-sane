@@ -97,10 +97,11 @@ Prioritized improvements for the tmux-sane project.
 
 ## Priority 4: Research / Future
 
-- [ ] **Integration with ask-* scripts**
-    - Use ask-nova-lite for cheap validation
-    - Use ask-claude-haiku for screen reading
-    - Value: Cheaper, faster validation layer
+- [x] **Integration with ask-* scripts** (Iteration 27)
+     - Use ask-nova-lite for cheap validation ✓
+     - Use ask-claude-haiku for complex queries ✓
+     - Value: Cheaper, faster validation layer ✓
+     - Result: Created lib/ask-helpers.sh with wrapper functions and sane-validate-with-ai command. Full test coverage (20/20 tests passing) ✓
 
 - [x] **SSH detection and tracking** (Iteration 24)
      - Detect when pane SSH's to remote host ✓

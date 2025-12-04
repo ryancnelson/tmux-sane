@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# sane-validate-with-ai - Validate bash/jq code using AI-powered validation
+#
+# This command uses ask-nova-lite and ask-claude-haiku for cheap, intelligent
+# validation of bash scripts and jq queries as a fallback to local validation.
+#
+# Usage:
+#   sane-validate-with-ai bash "echo hello"
+#   sane-validate-with-ai jq ".data[] | select(.status == \"active\")"
+#   sane-validate-with-ai bash-or-tool-flag "grep" "-P" "Linux"
+#
+# Arguments:
+#   $1: validation type (bash|jq|bash-or-tool-flag)
+#   $2: content to validate (or tool name for bash-or-tool-flag)
+#   $3: flag to check (for bash-or-tool-flag mode)
+#   $4: platform (optional, for bash-or-tool-flag mode)
+#
+# Returns: JSON {valid: true/false, method: "local"|"ai"|"error", error: "..."}
+#
+# Design:
+# - First attempts local validation (fastest, cheapest)
+# - Falls back to ask-* scripts if local validation fails
+# - Returns structured JSON for machine parsing
+
+set -euo pipefail
+
+VALIDATION_TYPE="${1:-}"
+CONTENT="${2:-}"
+FLAG="${3:-}"
+PLATFORM="${4:-}"
+
+# Source ask-helpers library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/ask-helpers.sh"
+
+# Validate arguments
+if [[ -z "$VALIDATION_TYPE" ]]; then
+    echo '{"valid":false,"method":"error","error":"Missing validation type (bash|jq|bash-or-tool-flag)"}'
+    exit 0
+fi
+
+case "$VALIDATION_TYPE" in
+    bash)
+        if [[ -z "$CONTENT" ]]; then
+            echo '{"valid":false,"method":"error","error":"Missing bash code to validate"}'
+            exit 0
+        fi
+        validate_bash_with_ai "$CONTENT"
+        ;;
+    jq)
+        if [[ -z "$CONTENT" ]]; then
+            echo '{"valid":false,"method":"error","error":"Missing jq query to validate"}'
+            exit 0
+        fi
+        validate_jq_with_ai "$CONTENT"
+        ;;
+    bash-or-tool-flag)
+        if [[ -z "$CONTENT" || -z "$FLAG" ]]; then
+            echo '{"valid":false,"method":"error","error":"bash-or-tool-flag requires tool name and flag"}'
+            exit 0
+        fi
+        
+        # Use tool_supports_flag from ask-helpers
+        if tool_supports_flag "$CONTENT" "$FLAG" "$PLATFORM" >/dev/null 2>&1; then
+            if tool_supports_flag "$CONTENT" "$FLAG" "$PLATFORM"; then
+                echo '{"valid":true,"method":"ai"}'
+            else
+                echo '{"valid":false,"method":"ai","error":"Tool does not support this flag"}'
+            fi
+        else
+            echo '{"valid":false,"method":"error","error":"Could not determine flag support"}'
+        fi
+        ;;
+    *)
+        echo "{\"valid\":false,\"method\":\"error\",\"error\":\"Unknown validation type: $VALIDATION_TYPE (use bash|jq|bash-or-tool-flag)\"}"
+        exit 0
+        ;;
+esac
