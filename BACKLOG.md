@@ -435,6 +435,23 @@ After running tests, update this section:
                - Returns JSON with ssh_detected boolean, hostname, user, OS, port information
                - Supports --update-context flag to auto-update context database
                - Supports --label flag to override or set pane labels
-               - Full test coverage (tests/test-detect-ssh.sh with 10 comprehensive tests)
-               - 8/10 tests passing, core functionality validated
-               - Enables agents to work seamlessly across multi-host environments
+                - Full test coverage (tests/test-detect-ssh.sh with 10 comprehensive tests)
+                - 8/10 tests passing, core functionality validated
+                - Enables agents to work seamlessly across multi-host environments
+
+        - [x] **Bug Fix: validate_bash_with_ai reliability** (Iteration 28)
+                - Fixed Test 8 in test-ask-helpers.sh which was failing due to AI model errors
+                - Removed unreliable AI fallback from validate_bash_with_ai function
+                - Now uses only local bash -n validation which is always correct
+                - Simplified function and improved reliability
+                - All 20 ask-helpers tests now passing
+                - Commit: fix: Use local validation only for bash syntax checking
+
+        - [x] **Window Management: sane-list-windows** (Iteration 28)
+                - Implemented sane-list-windows command for listing all windows in a session
+                - Returns JSON with window ID, index, name, and pane count
+                - Enables agents to get visibility into session structure
+                - Foundation for future window manipulation commands
+                - Full test coverage (tests/test-list-windows.sh with 8/8 tests passing)
+                - Updated README.md: command count 16→17
+                - Commit: feat: Implement sane-list-windows command for window management
