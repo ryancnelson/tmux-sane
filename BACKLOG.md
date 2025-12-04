@@ -5,12 +5,13 @@ Prioritized improvements for the tmux-sane project.
 ## Priority 1: Ready to Implement (30-60 min each)
 
 ### Edge Case Testing Phase
-- [ ] **Test 1: Multi-Host SSH Session** (Iteration 13)
+- [x] **Test 1: Multi-Host SSH Session** (Iteration 13)
   - Scope: 45 min
   - Setup: tues session, SSH from macOS to Linux host (hp2)
-  - Verify: sane-detect-platform correctly detects remote platform
-  - Verify: Context database tracks both local and remote panes
+  - Verify: sane-detect-platform correctly detects remote platform ✓
+  - Verify: Context database tracks both local and remote panes ✓
   - Value: Proves cross-platform awareness works in real scenario
+  - Result: All 9 tests passed. Created tests/test-multi-host-ssh.sh
 
 - [ ] **Test 2: Non-Bash REPL (Python/Node/Perl)** (Iteration 14)
   - Scope: 45 min
@@ -306,11 +307,20 @@ After running tests, update this section:
         - Full test coverage (15/15 tests passing)
         - Enables reliable file transfers across panes and hosts using wormhole protocol
 
-- [x] **Strategic Review #2** (Iteration 12, Checkpoint)
-        - All Priority 1-3 items completed (12 complete iterations)
-        - 142/142 tests passing across 14 test suites
-        - 15 production-grade sane-* commands implemented
-        - Clean git history with 25 commits
-        - Ready to enter "Proving Phase" with edge case testing
-        - Planning next 8 iterations (13-20) with clear theme
-        - See STRATEGIC-REVIEW-CHECKLIST.md for full review
+ - [x] **Strategic Review #2** (Iteration 12, Checkpoint)
+         - All Priority 1-3 items completed (12 complete iterations)
+         - 142/142 tests passing across 14 test suites
+         - 15 production-grade sane-* commands implemented
+         - Clean git history with 25 commits
+         - Ready to enter "Proving Phase" with edge case testing
+         - Planning next 8 iterations (13-20) with clear theme
+         - See STRATEGIC-REVIEW-CHECKLIST.md for full review
+
+ - [x] **Edge Case Test 1: Multi-Host SSH Session** (Iteration 13)
+         - Created comprehensive test suite (tests/test-multi-host-ssh.sh)
+         - Verified sane-detect-platform works with remote panes
+         - Verified sane-run-command executes on remote hosts
+         - Verified context database tracks remote pane metadata
+         - Full test coverage (9/9 tests passing)
+         - Proved cross-platform awareness works in real SSH scenario
+         - Foundation ready for remaining edge case tests (iterations 14-16)
