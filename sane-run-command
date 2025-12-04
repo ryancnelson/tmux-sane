@@ -1,34 +1,44 @@
 #!/usr/bin/env bash
 # sane-run-command - Execute a command in a tmux pane and return structured output
-# Usage: sane-run-command SESSION[:WINDOW.PANE] "command" [timeout_seconds]
+# Usage: sane-run-command SESSION[:WINDOW.PANE] "command" [timeout_seconds] [max_retries]
 # Examples:
 #   sane-run-command tues:0.0 "ls -la"
 #   sane-run-command tues:0.0 "ls -la" 60
+#   sane-run-command tues:0.0 "ls -la" 30 3
 #   sane-run-command tues "pwd"
 #
-# Returns JSON: {output, exit_code, duration_ms}
+# Returns JSON: {output, exit_code, duration_ms, attempts, retried}
 # Example output:
-#   {"output":"hello\nworld","exit_code":0,"duration_ms":245}
+#   {"output":"hello\nworld","exit_code":0,"duration_ms":245,"attempts":1,"retried":false}
 #
 # Implementation notes:
 # - Uses tmux capture-pane to read output (works with remote SSH panes)
 # - Sends unique markers to detect command completion
 # - Parses PS1 prompt to extract exit code when available
+# - Supports retry on transient failures (timeout, SSH errors)
+# - Implements exponential backoff for retries
 
 set -euo pipefail
 
 TARGET="${1:-}"
 COMMAND="${2:-}"
 TIMEOUT="${3:-30}"
+MAX_RETRIES="${4:-0}"
 
 if [[ -z "$TARGET" ]] || [[ -z "$COMMAND" ]]; then
-    echo "Usage: sane-run-command SESSION[:WINDOW.PANE] \"command\" [timeout_seconds]" >&2
+    echo "Usage: sane-run-command SESSION[:WINDOW.PANE] \"command\" [timeout_seconds] [max_retries]" >&2
     exit 1
 fi
 
 # Validate timeout is a number
 if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]]; then
     echo "Error: timeout must be a number, got '$TIMEOUT'" >&2
+    exit 1
+fi
+
+# Validate max_retries is a number
+if ! [[ "$MAX_RETRIES" =~ ^[0-9]+$ ]]; then
+    echo "Error: max_retries must be a number, got '$MAX_RETRIES'" >&2
     exit 1
 fi
 
@@ -67,78 +77,141 @@ if echo "$VALIDATION" | jq -e '.valid == false' > /dev/null 2>&1; then
     exit 0
 fi
 
-START_TIME=$(date +%s%N)
-
-# Create unique markers for this command execution
-MARKER_START="SANE_RUN_$$_START_$(date +%s%N)"
-MARKER_END="SANE_RUN_$$_END_$(date +%s%N)"
-
-# Send markers and command using proper quoting so shell expands variables
-# Format: echo START; { command }; echo end:$?
-# The $? will be expanded by the shell in the pane, giving us the exit code
-WRAPPED_CMD="echo $MARKER_START; { $COMMAND; } 2>&1; echo $MARKER_END:\$?"
-
-# Send the command to the pane
-tmux send-keys -t "$TARGET" "$WRAPPED_CMD" Enter
-
-# Wait for completion marker to appear in pane output
-ELAPSED=0
-MAX_WAIT=$TIMEOUT
-
-while [[ $ELAPSED -lt $MAX_WAIT ]]; do
-    PANE_OUTPUT=$(tmux capture-pane -t "$TARGET" -p)
+# Helper function to execute command once
+execute_once() {
+    local start_time=$(date +%s%N)
     
-    # Check if both markers are visible
-    if echo "$PANE_OUTPUT" | grep -q "$MARKER_START" && echo "$PANE_OUTPUT" | grep -q "$MARKER_END"; then
-        # Found both markers, extraction is possible
+    # Create unique markers for this command execution
+    local marker_start="SANE_RUN_$$_START_$(date +%s%N)"
+    local marker_end="SANE_RUN_$$_END_$(date +%s%N)"
+    
+    # Send markers and command using proper quoting so shell expands variables
+    # Format: echo START; { command }; echo end:$?
+    # The $? will be expanded by the shell in the pane, giving us the exit code
+    local wrapped_cmd="echo $marker_start; { $COMMAND; } 2>&1; echo $marker_end:\$?"
+    
+    # Send the command to the pane
+    tmux send-keys -t "$TARGET" "$wrapped_cmd" Enter
+    
+    # Wait for completion marker to appear in pane output
+    local elapsed=0
+    local max_wait=$TIMEOUT
+    
+    while [[ $elapsed -lt $max_wait ]]; do
+        local pane_output=$(tmux capture-pane -t "$TARGET" -p)
+        
+        # Check if both markers are visible
+        if echo "$pane_output" | grep -q "$marker_start" && echo "$pane_output" | grep -q "$marker_end"; then
+            # Found both markers, extraction is possible
+            break
+        fi
+        
+        sleep 0.5
+        ((elapsed=elapsed + 1))
+    done
+    
+    local end_time=$(date +%s%N)
+    
+    # Extract output between markers
+    local pane_output=$(tmux capture-pane -t "$TARGET" -p)
+    local output=""
+    local exit_code=1
+    
+    # Extract text between markers
+    # The format is: MARKER_START ... command output ... MARKER_END:exit_code
+    # We need to find both markers and extract the exit code from the end marker
+    if echo "$pane_output" | grep -q "$marker_start" && echo "$pane_output" | grep -q "$marker_end"; then
+        # Find the line numbers for markers
+        local start_line=$(echo "$pane_output" | grep -n "$marker_start" | tail -1 | cut -d: -f1)
+        local end_line=$(echo "$pane_output" | grep -n "$marker_end" | tail -1 | cut -d: -f1)
+        
+        if [[ -n "$start_line" && -n "$end_line" ]]; then
+            # Extract the end marker line to get the exit code
+            local end_marker_line=$(echo "$pane_output" | sed -n "${end_line}p")
+            if echo "$end_marker_line" | grep -q ":"; then
+                # Extract exit code from the end of the line after :
+                exit_code=$(echo "$end_marker_line" | grep -o ":[0-9]*$" | sed 's/://')
+            fi
+            
+            # Extract output between the markers (excluding the marker lines themselves)
+            # Lines from (START_LINE + 1) to (END_LINE - 1)
+            if [[ $end_line -gt $((start_line + 1)) ]]; then
+                output=$(echo "$pane_output" | sed -n "$((start_line+1)),$((end_line-1))p")
+            fi
+        fi
+    else
+        # Timeout - markers not found
+        output="Command timeout or incomplete output"
+        exit_code=1
+    fi
+    
+    # Calculate duration in milliseconds
+    local duration_ms=$(( (end_time - start_time) / 1000000 ))
+    
+    # Return exit code and output as separate lines (for parsing in bash)
+    echo "$exit_code"
+    echo "$duration_ms"
+    echo "$output"
+}
+
+# Main execution with retry logic
+TOTAL_START=$(date +%s%N)
+ATTEMPT=1
+LAST_EXIT_CODE=1
+LAST_DURATION=0
+LAST_OUTPUT=""
+TOTAL_ATTEMPTS=1
+
+while [[ $ATTEMPT -le $((MAX_RETRIES + 1)) ]]; do
+    if [[ $MAX_RETRIES -gt 0 ]] && [[ "${DEBUG_RETRY:-0}" == "1" ]]; then
+        echo "[Attempt $ATTEMPT/$((MAX_RETRIES + 1))]" >&2
+    fi
+    
+    # Execute the command once
+    result=$(execute_once)
+    
+    # Parse result (3 logical parts: exit_code, duration_ms, output...)
+    # The output can span multiple lines, so we need to handle it carefully
+    LAST_EXIT_CODE=$(echo "$result" | head -1)
+    LAST_DURATION=$(echo "$result" | head -2 | tail -1)
+    # Everything after the first 2 lines is the output
+    LAST_OUTPUT=$(echo "$result" | tail -n +3)
+    TOTAL_ATTEMPTS=$ATTEMPT
+    
+    # Check if we should retry
+    if [[ $LAST_EXIT_CODE -eq 0 ]] || [[ $ATTEMPT -ge $((MAX_RETRIES + 1)) ]]; then
+        # Success or no more retries
         break
     fi
     
-    sleep 0.5
-    ((ELAPSED=ELAPSED + 1))
+    # Check if the error is retriable (timeout or connection issues)
+    if [[ $LAST_EXIT_CODE -eq 124 ]] || [[ $LAST_EXIT_CODE -eq 255 ]] || [[ $LAST_EXIT_CODE -eq 28 ]]; then
+        if [[ $ATTEMPT -lt $((MAX_RETRIES + 1)) ]]; then
+            # Calculate exponential backoff: 1s, 2s, 4s, 8s, etc.
+            local backoff_delay=$((2 ** (ATTEMPT - 1)))
+            if [[ "${DEBUG_RETRY:-0}" == "1" ]]; then
+                echo "[Transient failure (exit code $LAST_EXIT_CODE), retrying in ${backoff_delay}s...]" >&2
+            fi
+            sleep "$backoff_delay"
+        fi
+    else
+        # Non-retriable error, don't retry
+        break
+    fi
+    
+    ((ATTEMPT++))
 done
 
-END_TIME=$(date +%s%N)
-
-# Extract output between markers
-PANE_OUTPUT=$(tmux capture-pane -t "$TARGET" -p)
-OUTPUT=""
-EXIT_CODE=1
-
-# Extract text between markers
-# The format is: MARKER_START ... command output ... MARKER_END:exit_code
-# We need to find both markers and extract the exit code from the end marker
-if echo "$PANE_OUTPUT" | grep -q "$MARKER_START" && echo "$PANE_OUTPUT" | grep -q "$MARKER_END"; then
-    # Find the line numbers for markers
-    START_LINE=$(echo "$PANE_OUTPUT" | grep -n "$MARKER_START" | tail -1 | cut -d: -f1)
-    END_LINE=$(echo "$PANE_OUTPUT" | grep -n "$MARKER_END" | tail -1 | cut -d: -f1)
-    
-    if [[ -n "$START_LINE" && -n "$END_LINE" ]]; then
-        # Extract the end marker line to get the exit code
-        END_MARKER_LINE=$(echo "$PANE_OUTPUT" | sed -n "${END_LINE}p")
-        if echo "$END_MARKER_LINE" | grep -q ":"; then
-            # Extract exit code from the end of the line after :
-            EXIT_CODE=$(echo "$END_MARKER_LINE" | grep -o ":[0-9]*$" | sed 's/://')
-        fi
-        
-        # Extract output between the markers (excluding the marker lines themselves)
-        # Lines from (START_LINE + 1) to (END_LINE - 1)
-        if [[ $END_LINE -gt $((START_LINE + 1)) ]]; then
-            OUTPUT=$(echo "$PANE_OUTPUT" | sed -n "$((START_LINE+1)),$((END_LINE-1))p")
-        fi
-    fi
-else
-    # Timeout - markers not found
-    OUTPUT="Command timeout or incomplete output"
-    EXIT_CODE=1
-fi
-
-# Calculate duration in milliseconds
-DURATION_MS=$(( (END_TIME - START_TIME) / 1000000 ))
+TOTAL_END=$(date +%s%N)
+TOTAL_DURATION_MS=$(( (TOTAL_END - TOTAL_START) / 1000000 ))
 
 # Escape output for JSON (handle newlines and special characters)
 # Note: jq -Rs will preserve the output correctly without extra trimming
-OUTPUT_JSON=$(echo "$OUTPUT" | jq -Rs '.')
+OUTPUT_JSON=$(echo "$LAST_OUTPUT" | jq -Rs '.')
 
-# Build response JSON
-echo "{\"output\":$OUTPUT_JSON,\"exit_code\":$EXIT_CODE,\"duration_ms\":$DURATION_MS}"
+# Build response JSON with retry information
+if [[ $TOTAL_ATTEMPTS -gt 1 ]]; then
+    echo "{\"output\":$OUTPUT_JSON,\"exit_code\":$LAST_EXIT_CODE,\"duration_ms\":$LAST_DURATION,\"total_duration_ms\":$TOTAL_DURATION_MS,\"attempts\":$TOTAL_ATTEMPTS,\"retried\":true}"
+else
+    echo "{\"output\":$OUTPUT_JSON,\"exit_code\":$LAST_EXIT_CODE,\"duration_ms\":$LAST_DURATION,\"attempts\":$TOTAL_ATTEMPTS,\"retried\":false}"
+fi
