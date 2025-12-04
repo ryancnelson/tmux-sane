@@ -73,10 +73,13 @@ Prioritized improvements for the tmux-sane project.
 
 ## Priority 3: Documentation & Release
 
-- [ ] **Getting Started Guide** (Iteration 21+)
-  - Write beginner-friendly walkthrough
-  - Include 3 practical examples
-  - Add troubleshooting section
+- [x] **Getting Started Guide** (Iteration 21)
+  - Scope: 45 min ✓
+  - Write beginner-friendly walkthrough ✓
+  - Include 3 practical examples ✓
+  - Add troubleshooting section ✓
+  - Value: Onboarding guide for new users ✓
+  - Result: Created GETTING-STARTED.md with comprehensive guide, 15 validation tests passing
 
 - [ ] **Agent Best Practices Document** (Iteration 22+)
   - Document patterns from sample workflows
