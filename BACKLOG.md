@@ -231,10 +231,11 @@ After running tests, update this section:
 ## Ideas Inbox (Unsorted)
 
 - Mouse mode helpers
-- Window management commands
+- Window management commands (split, select, resize, etc.)
 - Session health monitoring
 - Auto-cleanup of dead pane contexts
-- Integration with existing tmux-* scripts
+- Send keystroke primitive (sane-send-keys for raw keystroke input)
+- Wait for ready state primitive (sane-wait-ready for polling readiness)
 
 ## Completed
 
