@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# sane-setup-prompt - Set up a structured PS1 prompt in a target pane
+# Usage: sane-setup-prompt SESSION[:WINDOW.PANE]
+# Examples:
+#   sane-setup-prompt tues              # Active pane
+#   sane-setup-prompt tues:0.0          # Specific pane
+#   sane-setup-prompt tues:0            # Window 0, active pane
+#
+# The structured PS1 format enables reliable state detection:
+#   user@host - timestamp seq:N rslt:N bash $
+#
+# Example output:
+#   ryan@macbook - dec032025:035722pm seq:3201 rslt:0 bash $
+
+set -euo pipefail
+
+TARGET="${1:-}"
+
+if [[ -z "$TARGET" ]]; then
+    echo "Usage: sane-setup-prompt SESSION[:WINDOW.PANE]" >&2
+    exit 1
+fi
+
+# Check if session exists (extract session name from target)
+SESSION=$(echo "$TARGET" | cut -d: -f1)
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "Error: Session '$SESSION' does not exist" >&2
+    exit 1
+fi
+
+# Validate pane target if specified (SESSION:WINDOW.PANE format)
+if [[ "$TARGET" == *":"* ]]; then
+    PANE_SPEC=$(echo "$TARGET" | cut -d: -f2)
+    # Validate format: should be WINDOW.PANE or WINDOW
+    if ! echo "$PANE_SPEC" | grep -E '^[0-9]+(\.[0-9]+)?$' > /dev/null; then
+        echo "Error: Invalid pane specification '$PANE_SPEC'. Use format WINDOW or WINDOW.PANE" >&2
+        exit 1
+    fi
+    if ! tmux list-panes -t "$TARGET" > /dev/null 2>&1; then
+        echo "Error: Pane '$TARGET' does not exist" >&2
+        exit 1
+    fi
+else
+    # Use session shorthand (active pane)
+    TARGET="$SESSION"
+fi
+
+# Detect the current shell in the pane to determine how to set PS1
+# We'll try to detect bash vs zsh vs other shells
+MARKER="SANE_SETUP_$$_$(date +%s)"
+
+# Send command to detect shell
+tmux send-keys -t "$TARGET" "echo '${MARKER}_SHELL_START'" Enter
+sleep 0.3
+tmux send-keys -t "$TARGET" "echo \$SHELL" Enter
+sleep 0.3
+tmux send-keys -t "$TARGET" "echo '${MARKER}_SHELL_END'" Enter
+sleep 0.5
+
+# Capture output to detect shell
+PANE_OUTPUT=$(tmux capture-pane -t "$TARGET" -p)
+SHELL_OUTPUT=$(echo "$PANE_OUTPUT" | sed -n "/${MARKER}_SHELL_START/,/${MARKER}_SHELL_END/p" | grep -v "${MARKER}")
+
+# Determine shell type (look for bash, zsh, etc.)
+DETECTED_SHELL=""
+if echo "$SHELL_OUTPUT" | grep -q bash; then
+    DETECTED_SHELL="bash"
+elif echo "$SHELL_OUTPUT" | grep -q zsh; then
+    DETECTED_SHELL="zsh"
+fi
+
+# If we couldn't detect, we'll set up for bash (most common)
+if [[ -z "$DETECTED_SHELL" ]]; then
+    DETECTED_SHELL="bash"
+fi
+
+# Now set the PS1 prompt
+# The format follows: user@host - timestamp seq:N rslt:N bash $
+# We use bash escape sequences for dynamic values:
+#   \u = username
+#   \h = hostname (full)
+#   \D{%b%d%Y}:%t = date and time
+#   $HISTCMD = command sequence number
+#   $? = exit code (captured at prompt display time)
+
+case "$DETECTED_SHELL" in
+    bash)
+        # For bash: use $(...) command substitution for date formatting
+        PS1_CMD='export PS1='"'"'\u@\h - \D{%b%d%Y}:\t seq:$HISTCMD rslt:$? bash \$ '"'"
+        ;;
+    zsh)
+        # For zsh: use different syntax for prompts
+        # zsh uses % for special characters
+        PS1_CMD='export PS1='"'"'%n@%m - %D{%b%d%Y}:%t seq:%! rslt:$? bash %# '"'"
+        ;;
+    *)
+        # Fallback to bash format
+        PS1_CMD='export PS1='"'"'\u@\h - \D{%b%d%Y}:\t seq:$HISTCMD rslt:$? bash \$ '"'"
+        ;;
+esac
+
+# Send the PS1 export command to the pane
+tmux send-keys -t "$TARGET" "$PS1_CMD" Enter
+sleep 0.5
+
+# Verify the prompt was set by checking for the pattern
+MARKER="VERIFY_$$_$(date +%s)"
+tmux send-keys -t "$TARGET" "echo '${MARKER}_VERIFY'" Enter
+sleep 0.5
+
+VERIFY_OUTPUT=$(tmux capture-pane -t "$TARGET" -p)
+
+# Check if we can see our marker in the output (indicates prompt is working)
+if echo "$VERIFY_OUTPUT" | grep -q "${MARKER}_VERIFY"; then
+    # Success - prompt was set
+    
+    # Extract the actual pane identifier (might be different from target if target was shortened)
+    ACTUAL_PANE=$(tmux list-panes -t "$TARGET" -F "#{session_name}:#{window_index}.#{pane_index}" | head -1)
+    
+    # Output success JSON
+    cat <<EOF
+{
+  "status": "success",
+  "pane": "$ACTUAL_PANE",
+  "shell": "$DETECTED_SHELL",
+  "ps1_set": true,
+  "message": "Structured prompt configured"
+}
+EOF
+    exit 0
+else
+    # Failed to verify prompt
+    ACTUAL_PANE=$(tmux list-panes -t "$TARGET" -F "#{session_name}:#{window_index}.#{pane_index}" | head -1)
+    
+    cat <<EOF
+{
+  "status": "warning",
+  "pane": "$ACTUAL_PANE",
+  "shell": "$DETECTED_SHELL",
+  "ps1_set": false,
+  "message": "Prompt command sent but verification failed - may still be set"
+}
+EOF
+    exit 0
+fi

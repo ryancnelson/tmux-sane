@@ -41,11 +41,11 @@ Prioritized improvements for the tmux-sane project.
    - Value: Catch JSON errors early
 
 ### Prompt Management
-- [ ] **Create sane-setup-prompt command**
+- [x] **Create sane-setup-prompt command** (Iteration 6)
   - Scope: 45 min
   - Sets structured PS1 in target pane: `user@host - timestamp seq:N rslt:N bash $`
   - Detects current shell (bash/zsh)
-  - Add tests
+  - Add tests (10/10 tests passing)
   - Value: Enables reliable state detection
 
 ## Priority 2: Important but Need Breakdown
@@ -240,9 +240,17 @@ After running tests, update this section:
       - Enables pre-flight validation before sending commands to tmux
 
 - [x] **Create sane-validate-json command** (Iteration 5)
-      - Implemented sane-validate-json command for JSON syntax validation
-      - Uses `jq empty` to parse and validate JSON
-      - Returns structured JSON: {valid: true/false, error: "..."}
-      - Full test coverage (15/15 tests passing)
-      - Enables pre-flight validation for JSON payloads
-   
+       - Implemented sane-validate-json command for JSON syntax validation
+       - Uses `jq empty` to parse and validate JSON
+       - Returns structured JSON: {valid: true/false, error: "..."}
+       - Full test coverage (15/15 tests passing)
+       - Enables pre-flight validation for JSON payloads
+
+- [x] **Create sane-setup-prompt command** (Iteration 6)
+       - Implemented sane-setup-prompt command for structured prompt setup
+       - Sets PS1 in target pane: `user@host - timestamp seq:N rslt:N bash $`
+       - Detects shell type (bash/zsh) and sets appropriate prompt syntax
+       - Returns JSON: {status, pane, shell, ps1_set, message}
+       - Full test coverage (10/10 tests passing)
+       - Enables reliable state detection and command sequence tracking
+    
