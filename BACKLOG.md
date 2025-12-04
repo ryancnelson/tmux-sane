@@ -11,12 +11,12 @@ Prioritized improvements for the tmux-sane project.
   - Add tests for pane targeting
   - Value: Foundation for all other pane-aware commands
 
-- [ ] **Create sane-list-panes command**
-  - Scope: 45 min
-  - List all panes in a session with basic info (pane ID, current command, path)
-  - Returns JSON format
-  - Add tests
-  - Value: Visibility into session structure
+- [x] **Create sane-list-panes command** (Iteration 2)
+   - Scope: 45 min
+   - List all panes in a session with basic info (pane ID, current command, path)
+   - Returns JSON format
+   - Add tests
+   - Value: Visibility into session structure
 
 - [ ] **Create context database (~/.tmux-sane/contexts.json)**
   - Scope: 60 min
@@ -113,7 +113,14 @@ Prioritized improvements for the tmux-sane project.
   - Added tests
   
 - [x] **Add pane targeting to sane-detect-platform** (Iteration 1)
-  - Updated sane-detect-platform to accept SESSION:WINDOW.PANE format
-  - Maintains backward compatibility with session-only format
-  - Added comprehensive test coverage
-  - Foundation for pane-aware commands
+   - Updated sane-detect-platform to accept SESSION:WINDOW.PANE format
+   - Maintains backward compatibility with session-only format
+   - Added comprehensive test coverage
+   - Foundation for pane-aware commands
+
+- [x] **Create sane-list-panes command** (Iteration 2)
+   - Lists all panes in a session with ID, window/pane index, command, and path
+   - Returns structured JSON for machine-readable parsing
+   - Full test coverage (4/4 tests passing)
+   - Enables visibility into session structure for AI agents
+ 
