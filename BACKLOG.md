@@ -28,12 +28,13 @@ Prioritized improvements for the tmux-sane project.
    - Value: Common DevOps workflow ✓
    - Result: All 14 tests passed. Created tests/test-nested-tmux.sh
 
-- [ ] **Test 4: Network Device CLI** (Iteration 16)
-   - Scope: 45 min
-   - Setup: SSH to router or network device (or mock)
-   - Expected: Detection works, bash commands fail gracefully
-   - Expected: System knows it's in "raw mode"
-   - Value: Real-world network automation scenario
+- [x] **Test 4: Network Device CLI** (Iteration 16)
+    - Scope: 45 min
+    - Setup: SSH to router or network device (or mock) ✓
+    - Expected: Detection works, bash commands fail gracefully ✓
+    - Expected: System knows it's in "raw mode" ✓
+    - Value: Real-world network automation scenario ✓
+    - Result: All 13 tests passed. Created tests/test-network-device-cli.sh
 
 ### Sample Agent Workflows
 - [ ] **Simple Automation: Multi-file Project Creation** (Iteration 17)
@@ -337,12 +338,22 @@ After running tests, update this section:
            - Identified that sane-* commands require bash shells for proper operation
            - Foundation ready for remaining edge case tests (iterations 15-16)
 
-   - [x] **Edge Case Test 3: Nested tmux Sessions** (Iteration 15)
-           - Created comprehensive test suite (tests/test-nested-tmux.sh)
-           - Verified nested tmux server creation via alternate socket (/tmp/nested-tmux.sock)
-           - Verified parent session detection and operations
-           - Verified context isolation between parent and nested environments
-           - Verified sane-* commands target correct tmux server by default
-           - Full test coverage (14/14 tests passing)
-           - Demonstrated common DevOps workflow with nested tmux
-           - Foundation ready for remaining edge case test (iteration 16)
+    - [x] **Edge Case Test 3: Nested tmux Sessions** (Iteration 15)
+            - Created comprehensive test suite (tests/test-nested-tmux.sh)
+            - Verified nested tmux server creation via alternate socket (/tmp/nested-tmux.sock)
+            - Verified parent session detection and operations
+            - Verified context isolation between parent and nested environments
+            - Verified sane-* commands target correct tmux server by default
+            - Full test coverage (14/14 tests passing)
+            - Demonstrated common DevOps workflow with nested tmux
+            - Foundation ready for remaining edge case test (iteration 16)
+
+    - [x] **Edge Case Test 4: Network Device CLI** (Iteration 16)
+            - Created comprehensive test suite (tests/test-network-device-cli.sh)
+            - Built mock network device shell simulator (Cisco-like CLI)
+            - Verified platform detection works on non-bash environments
+            - Verified bash commands fail gracefully in raw mode
+            - Verified system completes without hanging on network devices
+            - Full test coverage (13/13 tests passing)
+            - Demonstrated graceful degradation for constrained environments
+            - Completed "Proving Phase" edge case testing (4 of 4 completed)
