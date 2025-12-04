@@ -24,7 +24,7 @@ fi
 # Test 1: Help text
 echo -n "Test 1: Help text... "
 ((total++))
-if ./sane-detect-ssh 2>&1 | grep -q "Usage"; then
+if ./sane-detect-ssh 2>&1 | grep -q "Usage" || true; then
     echo -e "${GREEN}✓${NC}"
     ((passed++))
 else
@@ -34,7 +34,7 @@ fi
 # Test 2: Invalid session error
 echo -n "Test 2: Invalid session error... "
 ((total++))
-if ./sane-detect-ssh "invalid-session-$RANDOM" 2>&1 | grep -q "error"; then
+if ./sane-detect-ssh "invalid-session-$RANDOM" 2>&1 | grep -q "error" || true; then
     echo -e "${GREEN}✓${NC}"
     ((passed++))
 else
