@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# sane-send-keys - Send keystrokes to a tmux pane and return pane state
+# Usage: sane-send-keys SESSION[:WINDOW.PANE] KEY [KEY ...]
+# Examples:
+#   sane-send-keys tues:0.0 "C-c"                 # Send Ctrl-C
+#   sane-send-keys tues:0.0 "echo hello" "Enter"  # Send text then Enter
+#   sane-send-keys tues:0.0 "C-u" "pwd" "Enter"   # Clear line, run command
+#
+# Special keys: C-a, C-c, C-d, C-k, C-u, Enter, Tab, Escape, etc.
+# Regular keys: Just pass as string (e.g., "echo hello")
+#
+# Returns JSON: {status, output, duration_ms, timestamp}
+# Example output:
+#   {"status":"sent","output":"hello\nworld","duration_ms":245,"timestamp":"2025-12-04T13:55:22Z"}
+
+set -euo pipefail
+
+TARGET="${1:-}"
+shift || true
+
+if [[ -z "$TARGET" ]] || [[ $# -eq 0 ]]; then
+    echo "Usage: sane-send-keys SESSION[:WINDOW.PANE] KEY [KEY ...]" >&2
+    exit 1
+fi
+
+# Check if session exists (extract session name from target)
+SESSION=$(echo "$TARGET" | cut -d: -f1)
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "{\"status\":\"error\",\"error\":\"Session '$SESSION' does not exist\"}" >&2
+    exit 1
+fi
+
+# Validate pane target if specified (SESSION:WINDOW.PANE format)
+if [[ "$TARGET" == *":"* ]]; then
+    PANE_SPEC=$(echo "$TARGET" | cut -d: -f2)
+    # Validate format: should be WINDOW.PANE or WINDOW
+    if ! echo "$PANE_SPEC" | grep -E '^[0-9]+(\.[0-9]+)?$' > /dev/null; then
+        echo "{\"status\":\"error\",\"error\":\"Invalid pane specification '$PANE_SPEC'. Use format WINDOW or WINDOW.PANE\"}" >&2
+        exit 1
+    fi
+    if ! tmux list-panes -t "$TARGET" > /dev/null 2>&1; then
+        echo "{\"status\":\"error\",\"error\":\"Pane '$TARGET' does not exist\"}" >&2
+        exit 1
+    fi
+else
+    # Use session shorthand (active pane)
+    TARGET="$SESSION"
+fi
+
+start_time=$(date +%s%N)
+timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+# Send all the keystrokes to the pane
+# Each argument is sent as-is to tmux send-keys
+# Special control sequences like "C-c" are handled by tmux
+for key in "$@"; do
+    # Detect if this is a special key or regular text
+    if [[ "$key" =~ ^C- ]] || [[ "$key" == "Enter" ]] || [[ "$key" == "Tab" ]] || [[ "$key" == "Escape" ]] || [[ "$key" =~ ^[A-Z][a-z]+ ]]; then
+        # This looks like a special key, send directly
+        tmux send-keys -t "$TARGET" "$key" 2>/dev/null || true
+    else
+        # This is regular text, send as text (no special interpretation)
+        tmux send-keys -t "$TARGET" -l "$key" 2>/dev/null || true
+    fi
+done
+
+# Brief delay to let pane settle
+sleep 0.2
+
+# Capture current pane output
+output=$(tmux capture-pane -t "$TARGET" -p)
+
+end_time=$(date +%s%N)
+duration_ms=$(( (end_time - start_time) / 1000000 ))
+
+# Escape output for JSON and return result
+escaped_output=$(echo "$output" | jq -Rs .)
+
+echo "{\"status\":\"sent\",\"output\":$escaped_output,\"duration_ms\":$duration_ms,\"timestamp\":\"$timestamp\"}"
+exit 0

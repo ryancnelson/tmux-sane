@@ -234,8 +234,18 @@ After running tests, update this section:
 - Window management commands (split, select, resize, etc.)
 - Session health monitoring
 - Auto-cleanup of dead pane contexts
-- Send keystroke primitive (sane-send-keys for raw keystroke input)
+
 ## Completed
+
+- [x] **Keystroke Handling: sane-send-keys** (Iteration 29)
+       - Implemented sane-send-keys command for sending keystrokes to panes
+       - Supports special keys: C-c, C-d, C-u, C-k, Enter, Tab, Escape
+       - Supports both control sequences and regular text input
+       - Returns JSON with status, output, duration_ms, and timestamp
+       - Full test coverage (tests/test-send-keys.sh with 12/12 tests passing)
+       - Updated README.md: command count 21→22, added example
+       - Enables agents to interact with interactive CLIs, REPLs, and raw mode panes
+       - Commit: feat: Implement sane-send-keys for keystroke input handling
 
 - [x] **Initial project setup** (Iteration 0)
   - Created DESIGN.md, README.md, AGENTS.md

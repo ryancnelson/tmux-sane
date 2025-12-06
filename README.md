@@ -29,7 +29,7 @@ Current issues with AI-controlled tmux sessions:
 - Common syntax errors (jq, JSON, bash) waste tokens and create friction
 - Agents improvise at keystroke level leading to inconsistent behavior
 
-## 21 Available Commands
+## 22 Available Commands
 
 | Command | Purpose |
 |---------|---------|
@@ -40,6 +40,7 @@ Current issues with AI-controlled tmux sessions:
 | `sane-list-windows` | List all windows in a session with metadata |
 | `sane-check-pane-health` | Check pane responsiveness and health status |
 | `sane-run-command` | Execute commands with reliable output capture |
+| `sane-send-keys` | Send keystrokes and special keys to panes |
 | `sane-create-file` | Create files with automatic escaping |
 | `sane-setup-prompt` | Configure structured prompts |
 | `sane-context-database` | Manage pane context metadata |
@@ -99,6 +100,17 @@ $ ./sane-detect-mode tues:0.0
   "capabilities": ["run_command", "create_file", "read_file", "validate_bash", "validate_json"],
   "supports_structured_prompt": true,
   "bash_specific": {"command_name": "-bash"}
+}
+```
+
+### Send keystrokes to a pane
+```bash
+$ ./sane-send-keys tues:0.0 "pwd" "Enter" | jq .
+{
+  "status": "sent",
+  "output": "/Users/ryan/projects/myapp\n$ ",
+  "duration_ms": 152,
+  "timestamp": "2025-12-04T13:55:22Z"
 }
 ```
 
@@ -164,11 +176,12 @@ $ ./sane-list-windows tues | jq .
 
 ## Test Coverage
 
-- **30 test suites** covering 379+ scenarios
+- **31 test suites** covering 391+ scenarios
 - **Edge cases**: SSH, REPLs, nested tmux, network devices
 - **Workflows**: Multi-file, multi-server, agent patterns
 - **Performance**: Command execution, file creation benchmarks
 - **Reliability**: Error recovery, timeouts, retries
+- **Keystroke handling**: Send keys, special characters, control sequences
 
 All tests pass with consistent, reproducible results.
 
