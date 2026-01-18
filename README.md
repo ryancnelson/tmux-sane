@@ -32,7 +32,7 @@ Below is what tmux-sane provides that claude-code-tools doesn't (yet). These rep
 - **Platform detection** - OS/arch/hostname detection even over SSH (enables cross-platform workflows)
 - **Friction logging** - Operation logging and analysis to identify LLM failure patterns
 - **Structured prompts** - Embedded state (sequence numbers, exit codes) for pane identification
-- **REPL detection** - Identify and handle REPL environments (Python, MySQL, etc.)
+- **REPL detection** - Identify and handle REPL environments (Python, MySQL, etc.) and non-shell CLI interfaces (network routers/switches, database consoles, embedded systems)
 - **File transfer** - Cross-machine file sync via magic-wormhole integration
 
 **Medium-value gaps:**
@@ -262,6 +262,9 @@ Coordinate work across multiple panes/hosts simultaneously with context awarenes
 
 ### SSH-based Workflows
 Run commands on remote servers with reliable output capture and platform detection.
+
+### Network Device Management
+Automate configuration and monitoring of network equipment (routers, switches, firewalls) via SSH. Handle non-bash CLI interfaces reliably with proper detection of command completion and output capture from vendor-specific command shells (Cisco IOS, Juniper JunOS, etc.).
 
 ### File Synchronization
 Transfer files between local and remote machines with automatic backups.
