@@ -4,6 +4,52 @@
 
 A reliable, guardrailed protocol for AI agents to interact with tmux sessions for pair programming.
 
+---
+
+## 🚨 Current Status: Published for Reference
+
+This repository represents my personal tmux automation toolkit developed over months of LLM-driven infrastructure work. It's being published **as a reference** while I contribute battle-tested features to **[claude-code-tools](https://github.com/pchalasani/claude-code-tools)**, which is better packaged and has wider reach.
+
+Rather than maintain a competing project, I'm contributing key features from tmux-sane to claude-code-tools and documenting the feature gap analysis below.
+
+### Why Publish This?
+
+1. **Transparency** - Show the source of contributed features (friction analysis, marker-based execution, etc.)
+2. **Context** - Demonstrate battle-tested patterns from production infrastructure work
+3. **Reference** - Document the evolution and lessons learned from months of LLM-tmux automation
+
+### Feature Gap Analysis: tmux-sane vs claude-code-tools
+
+Below is what tmux-sane provides that claude-code-tools doesn't (yet). These represent potential future contributions:
+
+#### ✅ Already Contributing to claude-code-tools
+- **Exit code extraction** - Marker-based command execution with reliable exit codes ([in progress](https://github.com/ryancnelson/claude-code-tools/tree/feature/exit-code-extraction))
+
+#### 📋 Potential Future Contributions
+
+**High-value gaps:**
+- **Pre-flight validation** - Bash/JSON syntax checking before execution (prevents wasted LLM cycles)
+- **Platform detection** - OS/arch/hostname detection even over SSH (enables cross-platform workflows)
+- **Friction logging** - Operation logging and analysis to identify LLM failure patterns
+- **Structured prompts** - Embedded state (sequence numbers, exit codes) for pane identification
+- **REPL detection** - Identify and handle REPL environments (Python, MySQL, etc.)
+- **File transfer** - Cross-machine file sync via magic-wormhole integration
+
+**Medium-value gaps:**
+- **Multi-pane orchestration** - Context management across multiple panes/hosts
+- **Health checks** - Pane responsiveness validation before command execution
+- **Retry logic** - Exponential backoff for transient failures
+- **Performance metrics** - Command timing for optimization analysis
+
+**Lower-priority gaps:**
+- **Label system** - Human-readable pane labels for tracking
+- **Mode detection** - Distinguish bash vs raw terminal mode
+- **Context database** - Persistent pane metadata storage
+
+Each potential contribution would be proposed separately with design discussion before implementation.
+
+---
+
 ## What is tmux-sane?
 
 tmux-sane provides high-level primitives that prevent AI agents from getting lost, confused, or making unreliable keystroke-level decisions when controlling tmux sessions. Instead of letting agents improvise at the keystroke level (trying vim commands, guessing escape sequences, etc.), tmux-sane offers a clean API with validation, error recovery, and friction logging.
