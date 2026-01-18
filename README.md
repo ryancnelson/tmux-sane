@@ -8,13 +8,13 @@ A reliable, guardrailed protocol for AI agents to interact with tmux sessions fo
 
 ## 🚨 Current Status: Published for Reference
 
-This repository represents my personal tmux automation toolkit developed over months of LLM-driven infrastructure work. It's being published **as a reference** while I contribute battle-tested features to **[claude-code-tools](https://github.com/pchalasani/claude-code-tools)**, which is better packaged and has wider reach.
+This repository represents my personal tmux automation toolkit developed over months of LLM-driven infrastructure work. It's being published **as a reference** while I offer to contribute battle-tested features to **[claude-code-tools](https://github.com/pchalasani/claude-code-tools)**, which is better packaged and has wider reach.
 
-Rather than maintain a competing project, I'm contributing key features from tmux-sane to claude-code-tools and documenting the feature gap analysis below.
+Rather than maintain a competing project, I'm proposing contributions of key features from tmux-sane to claude-code-tools and documenting the feature gap analysis below.
 
 ### Why Publish This?
 
-1. **Transparency** - Show the source of contributed features (friction analysis, marker-based execution, etc.)
+1. **Transparency** - Show the source of proposed features (friction analysis, marker-based execution, etc.)
 2. **Context** - Demonstrate battle-tested patterns from production infrastructure work
 3. **Reference** - Document the evolution and lessons learned from months of LLM-tmux automation
 
@@ -22,8 +22,8 @@ Rather than maintain a competing project, I'm contributing key features from tmu
 
 Below is what tmux-sane provides that claude-code-tools doesn't (yet). These represent potential future contributions:
 
-#### ✅ Already Contributing to claude-code-tools
-- **Exit code extraction** - Marker-based command execution with reliable exit codes ([in progress](https://github.com/ryancnelson/claude-code-tools/tree/feature/exit-code-extraction))
+#### ✅ First Proposed Contribution
+- **Exit code extraction** - Marker-based command execution with reliable exit codes ([pending review](https://github.com/ryancnelson/claude-code-tools/tree/feature/exit-code-extraction))
 
 #### 📋 Potential Future Contributions
 
